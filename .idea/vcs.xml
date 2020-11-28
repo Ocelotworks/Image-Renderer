@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/github.com/g3n/engine" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/github.com/go-gl/glfw" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/github.com/golang/freetype" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/golang.org/x/image" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/gopkg.in/yaml.v2" vcs="Git" />
+  </component>
+</project>
