@@ -1,54 +1,56 @@
 package main
 
 import (
-	"fmt"
-	q "github.com/ericpauley/go-quantize/quantize"
-	"github.com/fogleman/gg"
-	"image"
-	"image/color"
-	"image/draw"
-	"image/gif"
+	"encoding/json"
+	"github.com/streadway/amqp"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
+	"log"
 	"os"
 )
 
 func main() {
-	frames := 2
-	images := make([]*image.Paletted, frames)
-	delay := make([]int, frames)
-	quantizer := q.MedianCutQuantizer{}
 
-	for x := 0; x < frames; x++ {
-		const S = 1000
-		dc := gg.NewContext(S, S)
-		dc.DrawCircle(500, 500, 400)
-		dc.SetRGB(0.5, float64(x)/float64(frames), float64(x)/float64(frames))
-		dc.Fill()
-		originalImage := dc.Image()
-		qPalette := quantizer.Quantize(make([]color.Color, 0, 256), originalImage)
-		palettedImage := image.NewPaletted(originalImage.Bounds(), qPalette)
+	conn, exception := amqp.Dial(os.Getenv("RABBIT_URL"))
 
-		draw.Draw(palettedImage, originalImage.Bounds(), originalImage, image.Point{
-			X: 0,
-			Y: 0,
-		}, draw.Src)
-		images[x] = palettedImage
-		delay[x] = 100
-		fmt.Println("Drawing frame ", x)
-	}
-
-	output := gif.GIF{
-		Image:           images,
-		Delay:           delay,
-		LoopCount:       0,
-		BackgroundIndex: 0,
-	}
-
-	file, _ := os.Create("output.gif")
-	fmt.Println("Encoding output")
-
-	exception := gif.EncodeAll(file, &output)
 	if exception != nil {
-		fmt.Println(exception)
+		log.Fatalf("Failed to connect to RabbitMQ: %s", exception)
 	}
-	defer file.Close()
+
+	channel, exception := conn.Channel()
+
+	if exception != nil {
+		log.Fatalf("Failed to open channel: %s", exception)
+	}
+
+	_, exception = channel.QueueDeclare("imageProcessor", false, false, false, false, map[string]interface{}{
+		"x-message-ttl": 60000,
+	})
+
+	if exception != nil {
+		log.Fatalf("Failed to declare queue: %s", exception)
+	}
+
+	messages, exception := channel.Consume("imageProcessor", "", false, false, false, false, nil)
+
+	if exception != nil {
+		log.Fatalf("Failed to consume queue: %s", exception)
+	}
+
+	forever := make(chan bool)
+
+	go func() {
+		for messageData := range messages {
+			log.Printf("Received Message: %s", messageData.Body)
+			imageRequest := entity.ImageRequest{}
+			exception = json.Unmarshal(messageData.Body, &imageRequest)
+			if exception != nil {
+				log.Printf("Malformed message: %s", exception)
+			} else {
+				ProcessImage(&imageRequest)
+			}
+			_ = messageData.Ack(false)
+		}
+	}()
+
+	<-forever
 }
