@@ -20,19 +20,24 @@ var filters = map[string]filter.Filter{
 func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	canvas := gg.NewContext(request.Width, request.Height)
 	for _, component := range request.ImageComponents {
-		var img *image.Image
-		var exception error
-		if !component.Local {
-			img, exception = getImageUrl(component.Url)
-		} else {
-			img, exception = getLocalImage(component.Url)
-		}
+		var imageContext *gg.Context
+		if len(component.Url) > 0 {
+			var img *image.Image
+			var exception error
+			if !component.Local {
+				img, exception = getImageUrl(component.Url)
+			} else {
+				img, exception = getLocalImage(component.Url)
+			}
 
-		if exception != nil {
-			log.Println(exception)
-			continue
+			if exception != nil {
+				log.Println(exception)
+				continue
+			}
+			imageContext = gg.NewContextForImage(*img)
+		} else {
+			imageContext = gg.NewContext(request.Width, request.Height)
 		}
-		imageContext := gg.NewContextForImage(*img)
 
 		for _, filterObject := range component.Filters {
 			if filters[filterObject.Name] != nil {
