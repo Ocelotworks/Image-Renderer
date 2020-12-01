@@ -1,21 +1,23 @@
 package main
 
 import (
-	"fmt"
 	"github.com/fogleman/gg"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/filter"
 	"golang.org/x/image/draw"
 	"image"
+	"image/png"
 	"log"
 	"net/http"
+	"os"
+	"path"
 )
 
 var filters = map[string]filter.Filter{
 	"rectangle": filter.Rectangle{},
 }
 
-func ProcessImage(request *entity.ImageRequest) {
+func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	canvas := gg.NewContext(request.Width, request.Height)
 	for _, component := range request.ImageComponents {
 		var img *image.Image
@@ -23,7 +25,7 @@ func ProcessImage(request *entity.ImageRequest) {
 		if !component.Local {
 			img, exception = getImageUrl(component.Url)
 		} else {
-			// TODO: local images
+			img, exception = getLocalImage(component.Url)
 		}
 
 		if exception != nil {
@@ -52,25 +54,32 @@ func ProcessImage(request *entity.ImageRequest) {
 		if component.Position.Width != imageContext.Width() || component.Position.Height != imageContext.Height() {
 			newSize := image.Rectangle{
 				Min: image.Point{
-					X: component.Position.X,
-					Y: component.Position.Y,
+					X: 0,
+					Y: 0,
 				},
 				Max: image.Point{
-					X: component.Position.X + component.Position.Width,
-					Y: component.Position.Y + component.Position.Height,
+					X: component.Position.Width,
+					Y: component.Position.Height,
 				},
 			}
+			log.Println("New size: ", newSize)
 			dstImage = image.NewRGBA(newSize)
+
 			draw.BiLinear.Scale(dstImage, dstImage.Bounds(), imageContext.Image(), imageContext.Image().Bounds(), draw.Over, &draw.Options{})
 		} else {
 			dstImage = imageContext.Image().(*image.RGBA)
 		}
 
-		canvas.DrawImage(dstImage, component.Position.X, component.Position.X)
+		log.Println("Drawing image at ", component.Position.X, component.Position.Y)
+		canvas.DrawImage(dstImage, component.Position.X, component.Position.Y)
 		// Reset the rotation
 		canvas.RotateAbout(-component.Rotation, float64(component.Position.X), float64(component.Position.Y))
 	}
-	fmt.Println(OutputImage([]image.Image{canvas.Image()}))
+	result, extension := OutputImage([]image.Image{canvas.Image()}, request.Metadata)
+	return &entity.ImageResult{
+		Data:      result,
+		Extension: extension,
+	}
 }
 
 func getImageUrl(url string) (*image.Image, error) {
@@ -84,4 +93,13 @@ func getImageUrl(url string) (*image.Image, error) {
 		return nil, exception
 	}
 	return &img, nil
+}
+
+func getLocalImage(url string) (*image.Image, error) {
+	file, exception := os.Open(path.Join("res", url))
+	if exception != nil {
+		return nil, exception
+	}
+	img, exception := png.Decode(file)
+	return &img, exception
 }

@@ -1,3 +1,5 @@
+github.com/auyer/steganography v1.0.0 h1:0jty6tzmLff01Oe1Nz197XcutYV+LhgUhySCbfNQUrI=
+github.com/auyer/steganography v1.0.0/go.mod h1:Q2qN+f1ixaXnKTCT4xkSDCZ/5NiOpUeTgOCLwQdJD+A=
 github.com/ericpauley/go-quantize v0.0.0-20200331213906-ae555eb2afa4 h1:BBade+JlV/f7JstZ4pitd4tHhpN+w+6I+LyOS7B4fyU=
 github.com/ericpauley/go-quantize v0.0.0-20200331213906-ae555eb2afa4/go.mod h1:H7chHJglrhPPzetLdzBleF8d22WYOv7UM/lEKYiwlKM=
 github.com/fogleman/gg v1.3.0 h1:/7zJX8F6AaYQc57WQCyN9cAIz+4bCJGO9B+dyW29am8=

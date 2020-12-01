@@ -3,21 +3,31 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"github.com/auyer/steganography"
 	q "github.com/ericpauley/go-quantize/quantize"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
 	"image"
 	"image/color"
 	"image/draw"
 	"image/gif"
 	"image/png"
+	"log"
 	"os"
 )
 
-func OutputImage(input []image.Image) (string, string) {
+func OutputImage(input []image.Image, metadata *entity.Metadata) (string, string) {
 	buf := new(bytes.Buffer)
 	encoder := base64.NewEncoder(base64.StdEncoding, buf)
 	f, _ := os.Create("output.png")
+	defer f.Close()
 	var format string
+	stegMessage, exception := json.Marshal(metadata)
+	if exception != nil {
+		stegMessage = []byte("OCELOTBOT")
+		log.Println("Failed to marshal metadata: ", exception)
+	}
 	if len(input) > 1 {
 		images := make([]*image.Paletted, len(input))
 		delay := make([]int, len(input))
@@ -43,7 +53,16 @@ func OutputImage(input []image.Image) (string, string) {
 		format = "gif"
 	} else if len(input) == 1 {
 		fmt.Println("Output")
-		_ = png.Encode(f, input[0])
+		buf := new(bytes.Buffer)
+		exception = steganography.Encode(buf, input[0], stegMessage)
+
+		if exception != nil {
+			log.Println("Unable to encode message: ", exception)
+			_ = png.Encode(encoder, input[0])
+		} else {
+			_, _ = buf.WriteTo(encoder)
+		}
+		// _ = png.Encode(encoder, input[0])
 	}
 	return buf.String(), format
 }

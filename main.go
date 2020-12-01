@@ -46,7 +46,19 @@ func main() {
 			if exception != nil {
 				log.Printf("Malformed message: %s", exception)
 			} else {
-				ProcessImage(&imageRequest)
+				result := ProcessImage(&imageRequest)
+				output, exception := json.Marshal(result)
+				if exception != nil {
+					log.Printf("Unable to unmarshal: %s\n", exception)
+				}
+				log.Printf("Outputting to %s correlation %s\n", messageData.ReplyTo, messageData.CorrelationId)
+				exception = channel.Publish("", messageData.ReplyTo, false, false, amqp.Publishing{
+					CorrelationId: messageData.CorrelationId,
+					Body:          output,
+				})
+				if exception != nil {
+					log.Printf("Unable to publish: %s\n", exception)
+				}
 			}
 			_ = messageData.Ack(false)
 		}
