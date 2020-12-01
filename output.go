@@ -53,6 +53,7 @@ func OutputImage(input []image.Image, metadata *entity.Metadata) (string, string
 		format = "gif"
 	} else if len(input) == 1 {
 		fmt.Println("Output")
+		format = "png"
 		buf := new(bytes.Buffer)
 		exception = steganography.Encode(buf, input[0], stegMessage)
 
