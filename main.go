@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 	"github.com/streadway/amqp"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
+	"golang.org/x/image/webp"
+	"image"
 	"log"
 	"os"
 )
 
 func main() {
+
+	image.RegisterFormat("webp", "RIFF", webp.Decode, webp.DecodeConfig)
 
 	conn, exception := amqp.Dial(os.Getenv("RABBIT_URL"))
 
