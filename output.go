@@ -31,6 +31,7 @@ func OutputImage(input []image.Image, metadata *entity.Metadata) (string, string
 	if len(input) > 1 {
 		images := make([]*image.Paletted, len(input))
 		delay := make([]int, len(input))
+		disposal := make([]byte, len(input))
 		quantizer := q.MedianCutQuantizer{}
 		for frame, img := range input {
 			qPalette := quantizer.Quantize(make([]color.Color, 0, 256), img)
@@ -41,12 +42,14 @@ func OutputImage(input []image.Image, metadata *entity.Metadata) (string, string
 				Y: 0,
 			}, draw.Src)
 			images[frame] = palettedImage
-			delay[frame] = 100
+			delay[frame] = 1
+			disposal[frame] = gif.DisposalPrevious
 		}
 		output := gif.GIF{
 			Image:           images,
 			Delay:           delay,
 			LoopCount:       0,
+			Disposal:        disposal,
 			BackgroundIndex: 0,
 		}
 		_ = gif.EncodeAll(encoder, &output)
@@ -63,7 +66,6 @@ func OutputImage(input []image.Image, metadata *entity.Metadata) (string, string
 		} else {
 			_, _ = buf.WriteTo(encoder)
 		}
-		// _ = png.Encode(encoder, input[0])
 	}
 	return buf.String(), format
 }
