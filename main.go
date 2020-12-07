@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/streadway/amqp"
-	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
-	"golang.org/x/image/webp"
 	"image"
 	"log"
 	"os"
+
+	"github.com/streadway/amqp"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
+	"golang.org/x/image/webp"
 )
 
 func main() {
