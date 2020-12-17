@@ -64,14 +64,14 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			// apply any filters set for the component
 			for _, filterObject := range component.Filters {
 				// check the filter exists and apply it
-				var filter filter.Filter
+				var filterObj filter.Filter
 				var ok bool
-				if filter, ok = filters[filterObject.Name]; !ok {
+				if filterObj, ok = filters[filterObject.Name]; !ok {
 					log.Println("Unknown filter type ", filterObject)
 					continue
 				}
 				log.Println("Applying filter ", filterObject.Name, filterObject.Arguments)
-				filter.ApplyFilter(imageCtx, filterObject.Arguments)
+				filterObj.ApplyFilter(imageCtx, filterObject.Arguments)
 			}
 
 			// check if there is an existing canvas for this frame
@@ -192,7 +192,7 @@ func getImage(input io.Reader) ([]*image.Image, error) {
 		tmp := image.NewNRGBA(firstFrame.Bounds())
 		for i, img := range gifFile.Image {
 			// stack over tmp
-			draw.Draw(tmp, tmp.Bounds(), img, image.Point{0, 0}, draw.Over)
+			draw.Draw(tmp, tmp.Bounds(), img, image.Point{X: 0, Y: 0}, draw.Over)
 
 			// copy tmp as a new frame
 			clone := image.NewPaletted(tmp.Bounds(), img.Palette)

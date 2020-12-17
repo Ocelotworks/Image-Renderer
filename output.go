@@ -52,7 +52,7 @@ func OutputImage(input []image.Image, metadata *entity.Metadata) (string, string
 			Disposal:        disposal,
 			BackgroundIndex: 0,
 		}
-		_ = gif.EncodeAll(buf, &output)
+		_ = gif.EncodeAll(encoder, &output)
 		format = "gif"
 	} else if len(input) == 1 {
 		fmt.Println("Output")
