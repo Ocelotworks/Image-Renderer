@@ -1,7 +1,8 @@
 package entity
 
+// ImageComponent describes an image component in a request
 type ImageComponent struct {
-	Url      string `json:"url"`
+	URL      string `json:"url"`
 	Local    bool   `json:"local"`
 	Position struct {
 		X      int `json:"x"`

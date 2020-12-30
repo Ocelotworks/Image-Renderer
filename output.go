@@ -19,9 +19,8 @@ import (
 )
 
 // OutputImage outputs an image as a byte array and file extension combination
-func OutputImage(input []image.Image, metadata *entity.Metadata) (string, string) {
+func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata) (string, string) {
 	buf := new(bytes.Buffer)
-	encoder := base64.NewEncoder(base64.StdEncoding, buf)
 	var format string
 	stegMessage, exception := json.Marshal(metadata)
 	if exception != nil {
@@ -30,29 +29,34 @@ func OutputImage(input []image.Image, metadata *entity.Metadata) (string, string
 	}
 	if len(input) > 1 {
 		images := make([]*image.Paletted, len(input))
-		delay := make([]int, len(input))
 		disposal := make([]byte, len(input))
 
 		var wg sync.WaitGroup
 		for frame, img := range input {
 			wg.Add(1)
 			go quantizeWorker(frame, img, &wg, images)
-
-			// TODO: probably dont hardcode this
-			delay[frame] = 10
-			disposal[frame] = gif.DisposalPrevious
+			disposal[frame] = gif.DisposalBackground
 		}
 
 		wg.Wait()
 
+		firstFrame := images[0]
+		bounds := firstFrame.Bounds()
+		config := image.Config{
+			ColorModel: firstFrame.ColorModel(),
+			Width:      bounds.Max.X,
+			Height:     bounds.Max.Y,
+		}
+
 		output := gif.GIF{
 			Image:           images,
 			Delay:           delay,
-			LoopCount:       0,
 			Disposal:        disposal,
+			LoopCount:       0,
 			BackgroundIndex: 0,
+			Config:          config,
 		}
-		_ = gif.EncodeAll(encoder, &output)
+		_ = gif.EncodeAll(buf, &output)
 		format = "gif"
 	} else if len(input) == 1 {
 		fmt.Println("Output")
@@ -62,12 +66,12 @@ func OutputImage(input []image.Image, metadata *entity.Metadata) (string, string
 
 		if exception != nil {
 			log.Println("Unable to encode message: ", exception)
-			_ = png.Encode(encoder, input[0])
+			_ = png.Encode(buf, input[0])
 		} else {
-			_, _ = stegoBuf.WriteTo(encoder)
+			_, _ = stegoBuf.WriteTo(buf)
 		}
 	}
-	return buf.String(), format
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), format
 }
 
 func quantizeWorker(frameNum int, img image.Image, wg *sync.WaitGroup, output []*image.Paletted) {
