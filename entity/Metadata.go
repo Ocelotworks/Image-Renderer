@@ -1,5 +1,6 @@
 package entity
 
+// Metadata is metadata about an image request
 type Metadata struct {
 	ServerID  string `json:"s,omitempty"`
 	UserID    string `json:"u,omitempty"`
