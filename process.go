@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	"image/gif"
 	"io"
 	"io/ioutil"
@@ -27,22 +28,29 @@ var filters = map[string]filter.Filter{
 // ProcessImage processes an incoming ImageRequest and outputs a finished ImageResult
 func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	// holds all the contexts for each frame of the final output image
-	var outputContexts []*gg.Context
+	outputContexts := make([]*gg.Context, 0)
 
 	// the delay for each frame of the output image
 	var outputDelay []int
 
+	var unmaskedPrevious image.Image
 	// loop over each image component
-	for _, component := range request.ImageComponents {
+	for comp, component := range request.ImageComponents {
 		var frameContexts []*gg.Context
 		componentDelay := []int{}
 
 		// fetch the image by URL/path if provided, otherwise make a blank image context
 		if component.URL == "" {
-			frameContexts = []*gg.Context{gg.NewContext(request.Width, request.Height)}
+			ctx := gg.NewContext(request.Width, request.Height)
+			if comp == 0 {
+				ctx.SetRGB(0, 0, 0)
+				ctx.DrawRectangle(0, 0, float64(request.Width), float64(request.Height))
+				ctx.Fill()
+			}
+			frameContexts = []*gg.Context{ctx}
 		} else {
 			// decide which function to get the image with (explicitly typed)
-			var getImageFunc func(url string) ([]*image.Image, []int, error) = getImageURL
+			var getImageFunc = getImageURL
 			if component.Local {
 				getImageFunc = getLocalImage
 			}
@@ -58,12 +66,21 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			// create an image context for the image (or each frame for a gif)
 			frameContexts = make([]*gg.Context, len(frameImages))
 			for i, img := range frameImages {
-				frameContexts[i] = gg.NewContextForImage(*img)
+				dx := (*img).Bounds().Dx()
+				dy := (*img).Bounds().Dy()
+				ctx := gg.NewContext(dx, dy)
+				// this is a replacement for me figuring out the actual problems
+				if comp == 0 {
+					ctx.SetRGB(0, 0, 0)
+					ctx.DrawRectangle(0, 0, float64(dx), float64(dy))
+					ctx.Fill()
+				}
+				ctx.DrawImage(*img, 0, 0)
+				frameContexts[i] = ctx
 			}
 		}
 
 		totalFrames := max(len(frameContexts), len(outputContexts))
-
 		// get the image context for each frame (only 1 frame if not a gif)
 		for frameNum := 0; frameNum < totalFrames; frameNum++ {
 			// loop over a gif and apply it to all canvases (or apply a static image to every frame)
@@ -101,7 +118,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				outputDelay = append(outputDelay, delay)
 			}
 
-			// create a new canvas image context for this frame
+			// move the specified component to its target position
 			outputCtx.RotateAbout(component.Rotation, float64(component.Position.X), float64(component.Position.Y))
 
 			// if there is no width or height, set it from the current frame
@@ -141,6 +158,17 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 
 			// Reset the rotation
 			outputCtx.RotateAbout(-component.Rotation, float64(component.Position.X), float64(component.Position.Y))
+
+			// (Slow) optimisation for animated gifs
+			if comp == len(request.ImageComponents)-1 {
+				// The image must be copied here, to avoid using the mask as the unmasked previous frame
+				maskCopy := image.NewRGBA(outputCtx.Image().Bounds())
+				draw.Copy(maskCopy, image.Point{X: 0, Y: 0}, outputCtx.Image(), outputCtx.Image().Bounds(), draw.Src, nil)
+				if frameNum > 0 {
+					diffMask(outputCtx, unmaskedPrevious)
+				}
+				unmaskedPrevious = maskCopy
+			}
 		}
 	}
 
@@ -148,10 +176,11 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	for i, canvas := range outputContexts {
 		outputImages[i] = canvas.Image()
 	}
-	result, extension := OutputImage(outputImages, outputDelay, request.Metadata)
+	result, extension, length := OutputImage(outputImages, outputDelay, request.Metadata)
 	return &entity.ImageResult{
 		Data:      result,
 		Extension: extension,
+		Size:      length,
 	}
 }
 
@@ -178,6 +207,25 @@ func getLocalImage(url string) ([]*image.Image, []int, error) {
 	}
 	defer file.Close()
 	return getImage(file)
+}
+
+// Diffs two **identically sized** images together and creates an alpha mask
+func diffMask(context *gg.Context, image2 image.Image) {
+	image1 := context.Image()
+	for x := 0; x < image1.Bounds().Dx(); x++ {
+		for y := 0; y < image1.Bounds().Dy(); y++ {
+			if coloursEqual(image1.At(x, y), image2.At(x, y)) {
+				context.SetRGBA255(0, 0, 0, 0)
+				context.SetPixel(x, y)
+			}
+		}
+	}
+}
+
+func coloursEqual(colour1 color.Color, colour2 color.Color) bool {
+	r1, b1, g1, a1 := colour1.RGBA()
+	r2, b2, g2, a2 := colour2.RGBA()
+	return r1 == r2 && b1 == b2 && g1 == g2 && a1 == a2
 }
 
 func getImage(input io.Reader) ([]*image.Image, []int, error) {

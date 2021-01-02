@@ -19,7 +19,7 @@ import (
 )
 
 // OutputImage outputs an image as a byte array and file extension combination
-func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata) (string, string) {
+func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata) (string, string, int) {
 	buf := new(bytes.Buffer)
 	var format string
 	stegMessage, exception := json.Marshal(metadata)
@@ -35,7 +35,7 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata) (s
 		for frame, img := range input {
 			wg.Add(1)
 			go quantizeWorker(frame, img, &wg, images)
-			disposal[frame] = gif.DisposalBackground
+			disposal[frame] = gif.DisposalNone
 		}
 
 		wg.Wait()
@@ -56,6 +56,7 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata) (s
 			BackgroundIndex: 0,
 			Config:          config,
 		}
+
 		_ = gif.EncodeAll(buf, &output)
 		format = "gif"
 	} else if len(input) == 1 {
@@ -71,7 +72,7 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata) (s
 			_, _ = stegoBuf.WriteTo(buf)
 		}
 	}
-	return base64.StdEncoding.EncodeToString(buf.Bytes()), format
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), format, buf.Len() / 1000000 //Megabytes
 }
 
 func quantizeWorker(frameNum int, img image.Image, wg *sync.WaitGroup, output []*image.Paletted) {
