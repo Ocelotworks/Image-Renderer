@@ -11,6 +11,7 @@ type ImageComponent struct {
 		Height int `json:"h"`
 	} `json:"pos"`
 
-	Rotation float64   `json:"rot"`
-	Filters  []*Filter `json:"filter"`
+	Rotation   float64   `json:"rot"`
+	Filters    []*Filter `json:"filter"`
+	Background string    `json:"background"`
 }

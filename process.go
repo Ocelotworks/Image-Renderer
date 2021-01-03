@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
@@ -23,10 +22,22 @@ const _defaultDelay = 10
 
 var filters = map[string]filter.Filter{
 	"rectangle": filter.Rectangle{},
+	"text":      filter.Text{},
 }
 
 // ProcessImage processes an incoming ImageRequest and outputs a finished ImageResult
 func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
+	for _, component := range request.ImageComponents {
+		for _, filterData := range component.Filters {
+			var filterObj filter.Filter
+			var ok bool
+			if filterObj, ok = filters[filterData.Name]; !ok {
+				log.Println("Unknown filter type", filterData)
+				continue
+			}
+			filterObj.Preprocess(request, component, filterData)
+		}
+	}
 	// holds all the contexts for each frame of the final output image
 	outputContexts := make([]*gg.Context, 0)
 
@@ -43,9 +54,11 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 		if component.URL == "" {
 			ctx := gg.NewContext(request.Width, request.Height)
 			if comp == 0 {
-				ctx.SetRGB(0, 0, 0)
-				ctx.DrawRectangle(0, 0, float64(request.Width), float64(request.Height))
-				ctx.Fill()
+				if component.Background != "" {
+					ctx.SetHexColor(component.Background)
+					ctx.DrawRectangle(0, 0, float64(request.Width), float64(request.Height))
+					ctx.Fill()
+				}
 			}
 			frameContexts = []*gg.Context{ctx}
 		} else {
@@ -70,8 +83,8 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				dy := (*img).Bounds().Dy()
 				ctx := gg.NewContext(dx, dy)
 				// this is a replacement for me figuring out the actual problems
-				if comp == 0 {
-					ctx.SetRGB(0, 0, 0)
+				if component.Background != "" {
+					ctx.SetHexColor(component.Background)
 					ctx.DrawRectangle(0, 0, float64(dx), float64(dy))
 					ctx.Fill()
 				}
@@ -209,7 +222,7 @@ func getLocalImage(url string) ([]*image.Image, []int, error) {
 	return getImage(file)
 }
 
-// Diffs two **identically sized** images together and creates an alpha mask
+// Erases pixels on `context` that are different to those on `image2`
 func diffMask(context *gg.Context, image2 image.Image) {
 	image1 := context.Image()
 	for x := 0; x < image1.Bounds().Dx(); x++ {
@@ -246,7 +259,7 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 	}
 
 	if format == "gif" {
-		fmt.Println("Decode the gif")
+		log.Println("Decoding the gif...")
 		gifFile, err := gif.DecodeAll(reader)
 		if err != nil {
 			log.Fatalf("Error decoding gif: %s", err)
@@ -254,6 +267,7 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 		}
 		output := make([]*image.Image, len(gifFile.Image))
 
+		log.Println("Stacking frames...")
 		// use tmp to hold a stacked version of the frame
 		firstFrame := gifFile.Image[0]
 		frameBg := image.NewNRGBA(firstFrame.Bounds())
@@ -277,7 +291,6 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 			genericImage := image.Image(clone)
 			output[i] = &genericImage
 		}
-		fmt.Println()
 		return output, gifFile.Delay, nil
 	}
 
