@@ -2,15 +2,20 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path"
+	"runtime"
+	"sync"
+	"time"
 
 	"github.com/fogleman/gg"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
@@ -225,7 +230,24 @@ func getLocalImage(url string) ([]*image.Image, []int, error) {
 // Erases pixels on `context` that are different to those on `image2`
 func diffMask(context *gg.Context, image2 image.Image) {
 	image1 := context.Image()
-	for x := 0; x < image1.Bounds().Dx(); x++ {
+	var wg sync.WaitGroup
+
+	workers := runtime.NumCPU()
+	rowsPerWorker := int(math.Ceil(float64(image1.Bounds().Dx()) / float64(workers)))
+
+	fmt.Println("Creating ", workers, " workers for ", rowsPerWorker, "rows each")
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go diffSegment(context, image2, &wg, rowsPerWorker*(i+1), rowsPerWorker)
+	}
+	wg.Wait()
+}
+
+func diffSegment(context *gg.Context, image2 image.Image, wg *sync.WaitGroup, startX int, num int) {
+	defer wg.Done()
+	image1 := context.Image()
+	count := max(num, image1.Bounds().Dx())
+	for x := startX; x < count; x++ {
 		for y := 0; y < image1.Bounds().Dy(); y++ {
 			if coloursEqual(image1.At(x, y), image2.At(x, y)) {
 				context.SetRGBA255(0, 0, 0, 0)
@@ -233,6 +255,7 @@ func diffMask(context *gg.Context, image2 image.Image) {
 			}
 		}
 	}
+	fmt.Println("Segment ", startX, "is done")
 }
 
 func coloursEqual(colour1 color.Color, colour2 color.Color) bool {
@@ -265,6 +288,7 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 			log.Fatalf("Error decoding gif: %s", err)
 			return nil, nil, err
 		}
+
 		output := make([]*image.Image, len(gifFile.Image))
 
 		log.Println("Stacking frames...")
@@ -272,9 +296,9 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 		firstFrame := gifFile.Image[0]
 		frameBg := image.NewNRGBA(firstFrame.Bounds())
 
+		stackStart := time.Now()
 		for i, img := range gifFile.Image {
 			disposalMethod := gifFile.Disposal[i]
-
 			if disposalMethod != 0 && disposalMethod != gif.DisposalNone {
 				// clear the frame background if set to dispose the last frame
 				frameBg = image.NewNRGBA(img.Bounds())
@@ -291,9 +315,9 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 			genericImage := image.Image(clone)
 			output[i] = &genericImage
 		}
+		fmt.Println("Frame stacking took ", time.Since(stackStart).String())
 		return output, gifFile.Delay, nil
 	}
-
 	img, _, err := image.Decode(reader)
 	if err != nil {
 		return nil, nil, err
