@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"image"
 	"log"
 	"os"
@@ -40,6 +41,8 @@ func main() {
 	if exception != nil {
 		log.Fatalf("Failed to consume queue: %s", exception)
 	}
+
+	fmt.Println("Ready!")
 
 	forever := make(chan bool)
 
