@@ -182,7 +182,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				draw.Copy(maskCopy, image.Point{X: 0, Y: 0}, outputCtx.Image(), outputCtx.Image().Bounds(), draw.Src, nil)
 				if frameNum > 0 {
 					wg.Add(1)
-					go diffMask(outputCtx, unmaskedPrevious, &wg)
+					go diffMask(outputCtx, unmaskedPrevious, &wg, frameNum)
 				}
 				unmaskedPrevious = maskCopy
 			}
@@ -230,8 +230,9 @@ func getLocalImage(url string) ([]*image.Image, []int, error) {
 }
 
 // Erases pixels on `context` that are different to those on `image2`
-func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup) {
+func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup, num int) {
 	defer wg.Done()
+	log.Printf("Diff for frame %d has finished", num)
 	image1 := context.Image()
 	for x := 0; x < image1.Bounds().Dx(); x++ {
 		for y := 0; y < image1.Bounds().Dy(); y++ {
