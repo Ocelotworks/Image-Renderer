@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sync"
 
 	"github.com/fogleman/gg"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
@@ -93,6 +94,8 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			}
 		}
 
+		var wg sync.WaitGroup
+
 		totalFrames := max(len(frameContexts), len(outputContexts))
 		// get the image context for each frame (only 1 frame if not a gif)
 		for frameNum := 0; frameNum < totalFrames; frameNum++ {
@@ -166,7 +169,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				frameImage = inputFrameCtx.Image().(*image.RGBA)
 			}
 
-			log.Println("Drawing image at", component.Position.X, component.Position.Y)
+			log.Printf("Drawing component %d frame %d at %d,%d\n", comp, frameNum, component.Position.X, component.Position.Y)
 			outputCtx.DrawImage(frameImage, component.Position.X, component.Position.Y)
 
 			// Reset the rotation
@@ -178,11 +181,15 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				maskCopy := image.NewRGBA(outputCtx.Image().Bounds())
 				draw.Copy(maskCopy, image.Point{X: 0, Y: 0}, outputCtx.Image(), outputCtx.Image().Bounds(), draw.Src, nil)
 				if frameNum > 0 {
-					diffMask(outputCtx, unmaskedPrevious)
+					wg.Add(1)
+					go diffMask(outputCtx, unmaskedPrevious, &wg)
 				}
 				unmaskedPrevious = maskCopy
 			}
 		}
+		log.Println("Waiting for diff to finish...")
+		wg.Wait()
+		log.Println("Done!")
 	}
 
 	outputImages := make([]image.Image, len(outputContexts))
@@ -223,7 +230,8 @@ func getLocalImage(url string) ([]*image.Image, []int, error) {
 }
 
 // Erases pixels on `context` that are different to those on `image2`
-func diffMask(context *gg.Context, image2 image.Image) {
+func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup) {
+	defer wg.Done()
 	image1 := context.Image()
 	for x := 0; x < image1.Bounds().Dx(); x++ {
 		for y := 0; y < image1.Bounds().Dy(); y++ {
