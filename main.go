@@ -41,8 +41,6 @@ func main() {
 		log.Fatalf("Failed to consume queue: %s", exception)
 	}
 
-	log.Println("Ready!")
-
 	forever := make(chan bool)
 
 	go func() {
