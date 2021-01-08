@@ -19,7 +19,7 @@ import (
 )
 
 // OutputImage outputs an image as a byte array and file extension combination
-func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata) (string, string, int) {
+func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, frameDisposal bool) (string, string, int) {
 	buf := new(bytes.Buffer)
 	var format string
 	stegMessage, exception := json.Marshal(metadata)
@@ -35,7 +35,12 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata) (s
 		for frame, img := range input {
 			wg.Add(1)
 			go quantizeWorker(frame, img, &wg, images)
-			disposal[frame] = gif.DisposalNone
+			if frameDisposal {
+				disposal[frame] = gif.DisposalBackground
+			} else {
+				disposal[frame] = gif.DisposalNone
+			}
+
 		}
 
 		wg.Wait()

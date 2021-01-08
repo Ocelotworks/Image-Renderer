@@ -21,24 +21,82 @@ import (
 
 const _defaultDelay = 10
 
-var filters = map[string]filter.Filter{
+var filters = map[string]interface{}{
 	"rectangle": filter.Rectangle{},
 	"text":      filter.Text{},
+	"rainbow":   filter.Rainbow{},
 }
 
 // ProcessImage processes an incoming ImageRequest and outputs a finished ImageResult
 func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
+
 	for _, component := range request.ImageComponents {
 		for _, filterData := range component.Filters {
-			var filterObj filter.Filter
+			var filterObj interface{}
 			var ok bool
 			if filterObj, ok = filters[filterData.Name]; !ok {
 				log.Println("Unknown filter type", filterData)
 				continue
 			}
-			filterObj.Preprocess(request, component, filterData)
+			if processFilter, ok := filterObj.(filter.BeforeStacking); ok {
+				processFilter.BeforeStacking(request, component, filterData)
+			}
 		}
 	}
+
+	componentFrameImages := make([][]*image.Image, len(request.ImageComponents))
+	componentFrameDelays := make([][]int, len(request.ImageComponents))
+
+	//var wg sync.WaitGroup
+	for comp, component := range request.ImageComponents {
+		//wg.Add(1)
+		//go func(comp int, component *entity.ImageComponent) {
+		//defer wg.Done()
+		if component.URL == "" {
+			continue
+		}
+
+		// decide which function to get the image with (explicitly typed)
+		var getImageFunc = getImageURL
+		if component.Local {
+			getImageFunc = getLocalImage
+		}
+
+		// get the image, returns all the frames if the image is a gif
+		frameImages, frameDelay, err := getImageFunc(component.URL)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		for _, filterData := range component.Filters {
+			var filterObj interface{}
+			var ok bool
+			if filterObj, ok = filters[filterData.Name]; !ok {
+				log.Println("Unknown filter type", filterData)
+				continue
+			}
+			if processFilter, ok := filterObj.(filter.AfterStacking); ok {
+				processFilter.AfterStacking(filterData, request, component, &frameImages, &frameDelay)
+			}
+		}
+
+		// Set the component width/height to the width/height of the first frame if it's not currently set
+		if component.Position.Width == 0 {
+			component.Position.Width = (*frameImages[0]).Bounds().Dx()
+		}
+
+		if component.Position.Height == 0 {
+			component.Position.Height = (*frameImages[0]).Bounds().Dy()
+		}
+
+		componentFrameImages[comp] = frameImages
+		componentFrameDelays[comp] = frameDelay
+		//}(comp, component)
+	}
+
+	//wg.Done()
+
 	// holds all the contexts for each frame of the final output image
 	outputContexts := make([]*gg.Context, 0)
 
@@ -46,13 +104,23 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	var outputDelay []int
 
 	var unmaskedPrevious image.Image
+
+	shouldDiff := false
 	// loop over each image component
 	for comp, component := range request.ImageComponents {
+
+		if component.Background != "" {
+			shouldDiff = true
+		}
+
 		var frameContexts []*gg.Context
 		componentDelay := []int{}
 
-		// fetch the image by URL/path if provided, otherwise make a blank image context
-		if component.URL == "" {
+		frameImages := componentFrameImages[comp]
+		frameDelay := componentFrameDelays[comp]
+		componentDelay = frameDelay
+
+		if len(frameImages) == 0 {
 			ctx := gg.NewContext(request.Width, request.Height)
 			if comp == 0 {
 				if component.Background != "" {
@@ -63,20 +131,6 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			}
 			frameContexts = []*gg.Context{ctx}
 		} else {
-			// decide which function to get the image with (explicitly typed)
-			var getImageFunc = getImageURL
-			if component.Local {
-				getImageFunc = getLocalImage
-			}
-
-			// get the image, returns all the frames if the image is a gif
-			frameImages, frameDelay, err := getImageFunc(component.URL)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-			componentDelay = frameDelay
-
 			// create an image context for the image (or each frame for a gif)
 			frameContexts = make([]*gg.Context, len(frameImages))
 			for i, img := range frameImages {
@@ -105,14 +159,17 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			// apply any filters set for the component
 			for _, filterObject := range component.Filters {
 				// check the filter exists and apply it
-				var filterObj filter.Filter
+				var filterObj interface{}
 				var ok bool
 				if filterObj, ok = filters[filterObject.Name]; !ok {
 					log.Println("Unknown filter type", filterObject)
 					continue
 				}
-				log.Println("Applying filter", filterObject.Name, filterObject.Arguments)
-				filterObj.ApplyFilter(inputFrameCtx, filterObject.Arguments)
+				if processFilter, ok := filterObj.(filter.BeforeRender); ok {
+					log.Println("Applying filter", filterObject.Name, filterObject.Arguments)
+					processFilter.BeforeRender(inputFrameCtx, filterObject.Arguments, frameNum)
+				}
+
 			}
 
 			// check if there is an existing context for this frame
@@ -120,6 +177,12 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			if frameNum < len(outputContexts) {
 				outputCtx = outputContexts[frameNum]
 			} else {
+				if request.Width == 0 {
+					request.Width = component.Position.Width
+				}
+				if request.Height == 0 {
+					request.Height = component.Position.Height
+				}
 				outputCtx = gg.NewContext(request.Width, request.Height)
 				outputContexts = append(outputContexts, outputCtx)
 			}
@@ -136,14 +199,6 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 
 			// move the specified component to its target position
 			outputCtx.RotateAbout(component.Rotation, float64(component.Position.X), float64(component.Position.Y))
-
-			// if there is no width or height, set it from the current frame
-			if component.Position.Width == 0 {
-				component.Position.Width = inputFrameCtx.Width()
-			}
-			if component.Position.Height == 0 {
-				component.Position.Height = inputFrameCtx.Height()
-			}
 
 			// check if the frame needs to be resized
 			var frameImage *image.RGBA
@@ -176,7 +231,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			outputCtx.RotateAbout(-component.Rotation, float64(component.Position.X), float64(component.Position.Y))
 
 			// (Slow) optimisation for animated gifs
-			if comp == len(request.ImageComponents)-1 {
+			if shouldDiff && comp == len(request.ImageComponents)-1 {
 				// The image must be copied here, to avoid using the mask as the unmasked previous frame
 				maskCopy := image.NewRGBA(outputCtx.Image().Bounds())
 				draw.Copy(maskCopy, image.Point{X: 0, Y: 0}, outputCtx.Image(), outputCtx.Image().Bounds(), draw.Src, nil)
@@ -196,7 +251,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	for i, canvas := range outputContexts {
 		outputImages[i] = canvas.Image()
 	}
-	result, extension, length := OutputImage(outputImages, outputDelay, request.Metadata)
+	result, extension, length := OutputImage(outputImages, outputDelay, request.Metadata, !shouldDiff)
 	return &entity.ImageResult{
 		Data:      result,
 		Extension: extension,

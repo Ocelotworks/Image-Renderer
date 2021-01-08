@@ -3,9 +3,17 @@ package filter
 import (
 	"github.com/fogleman/gg"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
+	"image"
 )
 
-type Filter interface {
-	Preprocess(request *entity.ImageRequest, component *entity.ImageComponent, filter *entity.Filter)
-	ApplyFilter(ctx *gg.Context, args map[string]interface{}) *gg.Context
+type BeforeRender interface {
+	BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNum int) *gg.Context
+}
+
+type BeforeStacking interface {
+	BeforeStacking(request *entity.ImageRequest, component *entity.ImageComponent, filter *entity.Filter)
+}
+
+type AfterStacking interface {
+	AfterStacking(filter *entity.Filter, request *entity.ImageRequest, component *entity.ImageComponent, images *[]*image.Image, delays *[]int)
 }

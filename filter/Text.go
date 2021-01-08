@@ -8,7 +8,7 @@ import (
 
 type Text struct{}
 
-func (r Text) Preprocess(request *entity.ImageRequest, component *entity.ImageComponent, filter *entity.Filter) {
+func (r Text) BeforeProcess(request *entity.ImageRequest, component *entity.ImageComponent, filter *entity.Filter) {
 	// TODO: emoji parsing and shit
 	//parser := emoji.NewEmojiParser()
 	//i := 0
@@ -34,7 +34,7 @@ func (r Text) Preprocess(request *entity.ImageRequest, component *entity.ImageCo
 	//})
 }
 
-func (r Text) ApplyFilter(ctx *gg.Context, args map[string]interface{}) *gg.Context {
+func (r Text) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNum int) *gg.Context {
 	ctx.SetHexColor(args["colour"].(string))
 	_ = ctx.LoadFontFace(path.Join("res/font/", args["font"].(string)), args["fontSize"].(float64))
 	ctx.DrawStringWrapped(args["content"].(string), args["x"].(float64), args["y"].(float64), args["ax"].(float64), args["ay"].(float64), args["w"].(float64), args["spacing"].(float64), gg.Align(args["align"].(float64)))
