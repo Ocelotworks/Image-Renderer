@@ -18,8 +18,8 @@ build:
   retry:
     max: 2
     when: runner_system_failure
-#  before_script:
-#    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+  before_script:
+    - docker login -u gitlab-ci -p gitlab-ci $REGISTRY
   script:
     - mkdir -p .go
     - docker pull $REGISTRY/$CI_PROJECT_NAME:latest || true
