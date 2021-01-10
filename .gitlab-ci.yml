@@ -19,7 +19,7 @@ build:
     max: 2
     when: runner_system_failure
   before_script:
-    - docker login -u gitlab-ci -p gitlab-ci $REGISTRY
+    - docker login -u gitlab-ci -p gitlab-ci https://$REGISTRY
   script:
     - mkdir -p .go
     - docker pull $REGISTRY/v2/gitlab-ci/$CI_PROJECT_NAME:latest || true
