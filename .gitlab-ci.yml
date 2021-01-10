@@ -1,0 +1,43 @@
+stages:
+  - build
+
+build:
+  image: docker:stable
+  stage: build
+  services:
+    - docker:dind
+  except:
+    variables:
+      - $STAGE_BUILD == "false"
+    refs:
+      - tags
+  only:
+    - master
+    - stage
+    - test
+    - development
+  cache:
+    key: "$CI_PROJECT_ID"
+    policy: pull
+    paths:
+      - .go/pkg/mod/
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
+  retry:
+    max: 2
+    when: runner_system_failure
+  before_script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+  script:
+    - mkdir -p .go
+    - docker pull $REGISTRY/$CI_PROJECT_NAME:latest || true
+    - docker build . --cache-from $REGISTRY/$CI_PROJECT_NAME:latest
+      -t $CI_REGISTRY_IMAGE/$CI_PROJECT_NAME:$CI_PIPELINE_ID
+      -t $CI_REGISTRY_IMAGE/$CI_PROJECT_NAME:latest
+      --build-arg GITLAB_TOKEN=$GITLAB_TOKEN
+      --build-arg GITLAB_DOMAIN=$GITLAB_DOMAIN
+      --build-arg RABBIT_HOST=$RABBIT_HOST
+    - docker push $CI_REGISTRY_IMAGE/$CI_PROJECT_NAME:$CI_PIPELINE_ID
+    - docker push $CI_REGISTRY_IMAGE/$CI_PROJECT_NAME:latest
+    - docker image rm $CI_REGISTRY_IMAGE/$CI_PROJECT_NAME:latest
+    - docker image rm $CI_REGISTRY_IMAGE/$CI_PROJECT_NAME:$CI_PIPELINE_ID
