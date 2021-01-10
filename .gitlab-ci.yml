@@ -4,8 +4,6 @@ stages:
 build:
   image: docker:stable
   stage: build
-  services:
-    - docker:dind
   except:
     refs:
       - tags
@@ -33,3 +31,4 @@ build:
     - docker push $REGISTRY/$CI_PROJECT_PATH:latest
     - docker image rm $REGISTRY/$CI_PROJECT_PATH:latest
     - docker image rm $REGISTRY/$CI_PROJECT_PATH:$CI_PIPELINE_ID
+    - curl -X POST $DEPLOY_WEBHOOK
