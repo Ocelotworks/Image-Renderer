@@ -25,6 +25,7 @@ var filters = map[string]interface{}{
 	"rectangle": filter.Rectangle{},
 	"text":      filter.Text{},
 	"rainbow":   filter.Rainbow{},
+	"hyper":     filter.Hyper{},
 }
 
 // ProcessImage processes an incoming ImageRequest and outputs a finished ImageResult
