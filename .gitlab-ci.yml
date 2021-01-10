@@ -7,27 +7,19 @@ build:
   services:
     - docker:dind
   except:
-    variables:
-      - $STAGE_BUILD == "false"
     refs:
       - tags
   only:
     - master
-    - stage
-    - test
-    - development
-  cache:
-    key: "$CI_PROJECT_ID"
-    policy: pull
-    paths:
-      - .go/pkg/mod/
+  tags:
+    - shell
   variables:
     GOPATH: $CI_PROJECT_DIR/.go
   retry:
     max: 2
     when: runner_system_failure
-  before_script:
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+#  before_script:
+#    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
   script:
     - mkdir -p .go
     - docker pull $REGISTRY/$CI_PROJECT_NAME:latest || true
