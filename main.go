@@ -36,6 +36,8 @@ func main() {
 		log.Fatalf("Failed to declare queue: %s", exception)
 	}
 
+	_ = channel.Qos(4, 0, true)
+
 	messages, exception := channel.Consume("imageProcessor", "", false, false, false, false, nil)
 
 	if exception != nil {
@@ -48,29 +50,33 @@ func main() {
 
 	go func() {
 		for messageData := range messages {
-			log.Printf("Received Message: %s", messageData.Body)
-			imageRequest := entity.ImageRequest{}
-			exception = json.Unmarshal(messageData.Body, &imageRequest)
-			if exception != nil {
-				log.Printf("Malformed message: %s", exception)
-			} else {
-				result := ProcessImage(&imageRequest)
-				output, exception := json.Marshal(result)
-				if exception != nil {
-					log.Printf("Unable to unmarshal: %s\n", exception)
-				}
-				log.Printf("Outputting to %s correlation %s\n", messageData.ReplyTo, messageData.CorrelationId)
-				exception = channel.Publish("", messageData.ReplyTo, false, false, amqp.Publishing{
-					CorrelationId: messageData.CorrelationId,
-					Body:          output,
-				})
-				if exception != nil {
-					log.Printf("Unable to publish: %s\n", exception)
-				}
-			}
-			_ = messageData.Ack(false)
+			go processMessage(messageData, channel)
 		}
 	}()
 
 	<-forever
+}
+
+func processMessage(messageData amqp.Delivery, channel *amqp.Channel) {
+	log.Printf("Received Message: %s", messageData.Body)
+	imageRequest := entity.ImageRequest{}
+	exception := json.Unmarshal(messageData.Body, &imageRequest)
+	if exception != nil {
+		log.Printf("Malformed message: %s", exception)
+	} else {
+		result := ProcessImage(&imageRequest)
+		output, exception := json.Marshal(result)
+		if exception != nil {
+			log.Printf("Unable to unmarshal: %s\n", exception)
+		}
+		log.Printf("Outputting to %s correlation %s\n", messageData.ReplyTo, messageData.CorrelationId)
+		exception = channel.Publish("", messageData.ReplyTo, false, false, amqp.Publishing{
+			CorrelationId: messageData.CorrelationId,
+			Body:          output,
+		})
+		if exception != nil {
+			log.Printf("Unable to publish: %s\n", exception)
+		}
+	}
+	_ = messageData.Ack(false)
 }
