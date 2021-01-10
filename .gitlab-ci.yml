@@ -22,14 +22,14 @@ build:
     - docker login -u gitlab-ci -p gitlab-ci $REGISTRY
   script:
     - mkdir -p .go
-    - docker pull $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:latest || true
-    - docker build . --cache-from $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:latest
-      -t $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:$CI_PIPELINE_ID
-      -t $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:latest
+    - docker pull $REGISTRY/v2/$CI_PROJECT_PATH_SLUG:latest || true
+    - docker build . --cache-from $REGISTRY/v2/$CI_PROJECT_PATH_SLUG:latest
+      -t $REGISTRY/v2/$CI_PROJECT_PATH_SLUG:$CI_PIPELINE_ID
+      -t $REGISTRY/v2/$CI_PROJECT_PATH_SLUG:latest
       --build-arg GITLAB_TOKEN=$GITLAB_TOKEN
       --build-arg GITLAB_DOMAIN=$GITLAB_DOMAIN
       --build-arg RABBIT_HOST=$RABBIT_HOST
-    - docker push $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:$CI_PIPELINE_ID
-    - docker push $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:latest
-    - docker image rm $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:latest
-    - docker image rm $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:$CI_PIPELINE_ID
+    - docker push $REGISTRY/v2/$CI_PROJECT_PATH_SLUG:$CI_PIPELINE_ID
+    - docker push $REGISTRY/v2/$CI_PROJECT_PATH_SLUG:latest
+    - docker image rm $REGISTRY/v2/$CI_PROJECT_PATH_SLUG:latest
+    - docker image rm $REGISTRY/v2/$CI_PROJECT_PATH_SLUG:$CI_PIPELINE_ID
