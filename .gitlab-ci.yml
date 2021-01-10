@@ -22,14 +22,14 @@ build:
     - docker login -u gitlab-ci -p gitlab-ci $REGISTRY
   script:
     - mkdir -p .go
-    - docker pull $REGISTRY/$CI_PROJECT_NAME:latest || true
-    - docker build . --cache-from $REGISTRY/$CI_PROJECT_NAME:latest
-      -t $REGISTRY/$CI_PROJECT_NAME:$CI_PIPELINE_ID
-      -t $REGISTRY/$CI_PROJECT_NAME:latest
+    - docker pull $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:latest || true
+    - docker build . --cache-from $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:latest
+      -t $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:$CI_PIPELINE_ID
+      -t $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:latest
       --build-arg GITLAB_TOKEN=$GITLAB_TOKEN
       --build-arg GITLAB_DOMAIN=$GITLAB_DOMAIN
       --build-arg RABBIT_HOST=$RABBIT_HOST
-    - docker push $REGISTRY/$CI_PROJECT_NAME:$CI_PIPELINE_ID
-    - docker push $REGISTRY/$CI_PROJECT_NAME:latest
-    - docker image rm $REGISTRY/$CI_PROJECT_NAME:latest
-    - docker image rm $REGISTRY/$CI_PROJECT_NAME:$CI_PIPELINE_ID
+    - docker push $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:$CI_PIPELINE_ID
+    - docker push $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:latest
+    - docker image rm $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:latest
+    - docker image rm $REGISTRY/gitlab-ci/$CI_PROJECT_NAME:$CI_PIPELINE_ID
