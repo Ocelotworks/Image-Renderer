@@ -3,7 +3,9 @@ package filter
 import (
 	"github.com/fogleman/gg"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
 	"image"
+	"sync"
 )
 
 type Rainbow struct{}
@@ -17,24 +19,29 @@ func (r Rainbow) AfterStacking(filter *entity.Filter, request *entity.ImageReque
 		}
 	}
 
-	outputImages := make([]*image.Image, len(*images))
+	var wg sync.WaitGroup
+	totalFrames := len(*images)
+	outputImages := make([]*image.Image, totalFrames)
 	for i, frame := range *images {
-		ctx := gg.NewContextForImage(*frame)
-		r, g, b := hslToRgb(float64(i)/float64(len(*images)), 1, 0.5)
-		for x := 0; x < (*frame).Bounds().Dx(); x++ {
-			for y := 0; y < (*frame).Bounds().Dy(); y++ {
-				r1, b1, g1, a1 := (*frame).At(x, y).RGBA()
-				if a1 > 0 {
-					ctx.SetRGBA255(blendColours(r1, r), blendColours(g1, g), blendColours(b1, b), to8Bit(a1))
-					ctx.SetPixel(x, y)
-				}
-			}
-		}
-		updatedFrame := ctx.Image()
-		outputImages[i] = &updatedFrame
+		wg.Add(1)
+		go processFrame(frame, i, totalFrames, outputImages, &wg)
+
 	}
+	wg.Wait()
 	*images = outputImages
 	return
+}
+
+func processFrame(frame *image.Image, frameNum int, totalFrames int, outputImages []*image.Image, wg *sync.WaitGroup) {
+	defer wg.Done()
+	r, g, b := hslToRgb(float64(frameNum)/float64(totalFrames), 1, 0.5)
+	updatedFrame := helper.ForEveryPixel(*frame, func(x int, y int, ctx *gg.Context, r1 uint32, b1 uint32, g1 uint32, a1 uint32) {
+		if a1 > 0 {
+			ctx.SetRGBA255(blendColours(r1, r), blendColours(g1, g), blendColours(b1, b), to8Bit(a1))
+			ctx.SetPixel(x, y)
+		}
+	})
+	outputImages[frameNum] = &updatedFrame
 }
 
 func blendColours(colour1 uint32, colour2 int) int {
