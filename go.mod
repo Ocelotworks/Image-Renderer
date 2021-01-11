@@ -6,9 +6,8 @@ require (
 	github.com/auyer/steganography v1.0.0
 	github.com/ericpauley/go-quantize v0.0.0-20200331213906-ae555eb2afa4
 	github.com/fogleman/gg v1.3.0
+	github.com/getsentry/sentry-go v0.9.0
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/streadway/amqp v1.0.0
-	github.com/stretchr/testify v1.6.1 // indirect
-	github.com/urakozz/go-emoji v0.0.0-20200127103110-a37fee94b407
 	golang.org/x/image v0.0.0-20200927104501-e162460cd6b5
 )

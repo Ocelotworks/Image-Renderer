@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
+	"github.com/getsentry/sentry-go"
 	"image"
 	"image/color"
 	"image/draw"
@@ -19,12 +19,13 @@ import (
 )
 
 // OutputImage outputs an image as a byte array and file extension combination
-func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, frameDisposal bool) (string, string, int) {
+func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, frameDisposal bool) (string, string, int, error) {
 	buf := new(bytes.Buffer)
 	var format string
 	stegMessage, exception := json.Marshal(metadata)
 	if exception != nil {
 		stegMessage = []byte("OCELOTBOT")
+		sentry.CaptureException(exception)
 		log.Println("Failed to marshal metadata: ", exception)
 	}
 	if len(input) > 1 {
@@ -62,22 +63,34 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, fr
 			Config:          config,
 		}
 
-		_ = gif.EncodeAll(buf, &output)
+		exception = gif.EncodeAll(buf, &output)
+		if exception != nil {
+			return "", "", 0, exception
+		}
 		format = "gif"
 	} else if len(input) == 1 {
-		fmt.Println("Output")
 		format = "png"
 		stegoBuf := new(bytes.Buffer)
 		exception = steganography.Encode(stegoBuf, input[0], stegMessage)
 
 		if exception != nil {
+			sentry.CaptureException(exception)
 			log.Println("Unable to encode message: ", exception)
-			_ = png.Encode(buf, input[0])
+			exception = png.Encode(buf, input[0])
 		} else {
-			_, _ = stegoBuf.WriteTo(buf)
+			_, exception := stegoBuf.WriteTo(buf)
+			if exception != nil {
+				sentry.CaptureException(exception)
+				log.Println("Unable to write steg message: ", exception)
+				exception = png.Encode(buf, input[0])
+			}
+		}
+
+		if exception != nil {
+			return "", "", 0, exception
 		}
 	}
-	return base64.StdEncoding.EncodeToString(buf.Bytes()), format, buf.Len() / 1000000 //Megabytes
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), format, buf.Len() / 1000000, nil //Megabytes
 }
 
 func quantizeWorker(frameNum int, img image.Image, wg *sync.WaitGroup, output []*image.Paletted) {

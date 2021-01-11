@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/getsentry/sentry-go"
 	"image"
 	"image/color"
 	"image/gif"
@@ -37,6 +39,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			var ok bool
 			if filterObj, ok = filters[filterData.Name]; !ok {
 				log.Println("Unknown filter type", filterData)
+				sentry.CaptureMessage(fmt.Sprintf("Unknown filter type '%s'", filterData))
 				continue
 			}
 			if processFilter, ok := filterObj.(filter.BeforeStacking); ok {
@@ -64,10 +67,11 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 		}
 
 		// get the image, returns all the frames if the image is a gif
-		frameImages, frameDelay, err := getImageFunc(component.URL)
-		if err != nil {
-			log.Println(err)
-			continue
+		frameImages, frameDelay, exception := getImageFunc(component.URL)
+		if exception != nil {
+			log.Println("Unable to get image:", exception)
+			sentry.CaptureException(exception)
+			return &entity.ImageResult{Error: "get_image"}
 		}
 
 		for _, filterData := range component.Filters {
@@ -252,7 +256,11 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	for i, canvas := range outputContexts {
 		outputImages[i] = canvas.Image()
 	}
-	result, extension, length := OutputImage(outputImages, outputDelay, request.Metadata, !shouldDiff)
+	result, extension, length, exception := OutputImage(outputImages, outputDelay, request.Metadata, !shouldDiff)
+	if exception != nil {
+		sentry.CaptureException(exception)
+		return &entity.ImageResult{Error: "output"}
+	}
 	return &entity.ImageResult{
 		Data:      result,
 		Extension: extension,
