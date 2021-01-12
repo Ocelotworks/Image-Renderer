@@ -30,5 +30,6 @@ FROM alpine
 RUN apk --no-cache --update add ca-certificates
 WORKDIR /app
 COPY --from=go-build /src/main /app/
-COPY ./res /app/res
+RUN mkdir /app/res
+COPY --from=go-build /src/res/* /app/res/
 ENTRYPOINT ./main
