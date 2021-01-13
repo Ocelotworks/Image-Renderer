@@ -298,10 +298,12 @@ func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup, num i
 	defer wg.Done()
 	log.Printf("Diff for frame %d has finished", num)
 	image1 := context.Image()
-	for x := 0; x < image1.Bounds().Dx(); x++ {
-		for y := 0; y < image1.Bounds().Dy(); y++ {
+	dx := image1.Bounds().Dx()
+	dy := image1.Bounds().Dy()
+	context.SetRGBA255(0, 0, 0, 0)
+	for x := 0; x < dx; x++ {
+		for y := 0; y < dy; y++ {
 			if coloursEqual(image1.At(x, y), image2.At(x, y)) {
-				context.SetRGBA255(0, 0, 0, 0)
 				context.SetPixel(x, y)
 			}
 		}
@@ -335,7 +337,8 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 		log.Println("Decoding the gif...")
 		gifFile, err := gif.DecodeAll(reader)
 		if err != nil {
-			log.Fatalf("Error decoding gif: %s", err)
+
+			log.Printf("Error decoding gif: %s\n", err)
 			return nil, nil, err
 		}
 		output := make([]*image.Image, len(gifFile.Image))

@@ -1,10 +1,10 @@
 package filter
 
 import (
-	"github.com/fogleman/gg"
+	"fmt"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
-	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
 	"image"
+	"image/color"
 	"sync"
 )
 
@@ -24,43 +24,103 @@ func (r Rainbow) AfterStacking(filter *entity.Filter, request *entity.ImageReque
 	outputImages := make([]*image.Image, totalFrames)
 	for i, frame := range *images {
 		wg.Add(1)
-		go processFrame(frame, i, totalFrames, outputImages, &wg)
+		outputImages[i] = processFrame(frame, i, totalFrames, &wg)
+		fmt.Printf("Output: %p, %p\n", frame, outputImages[i])
 
 	}
 	wg.Wait()
-	*images = outputImages
+	images = &outputImages
 	return
 }
 
-func processFrame(frame *image.Image, frameNum int, totalFrames int, outputImages []*image.Image, wg *sync.WaitGroup) {
+func processFrame(frame *image.Image, frameNum int, totalFrames int, wg *sync.WaitGroup) *image.Image {
 	defer wg.Done()
-	r, g, b := hslToRgb(float64(frameNum)/float64(totalFrames), 1, 0.5)
-	updatedFrame := helper.ForEveryPixel(*frame, func(x int, y int, ctx *gg.Context, r1 uint32, b1 uint32, g1 uint32, a1 uint32) {
-		if a1 > 0 {
-			ctx.SetRGBA255(blendColours(r1, r), blendColours(g1, g), blendColours(b1, b), to8Bit(a1))
-			ctx.SetPixel(x, y)
-		}
-	})
-	outputImages[frameNum] = &updatedFrame
+
+	palettedFrame, ok := (*frame).(*image.Paletted)
+
+	if ok {
+		return processPalettedFrame(palettedFrame, frameNum, totalFrames)
+	}
+
+	rgbaFrame, ok := (*frame).(*image.RGBA)
+
+	if ok {
+		return processRGBAFrame(rgbaFrame, frameNum, totalFrames)
+	}
+
+	nrgbaFrame, ok := (*frame).(*image.NRGBA)
+
+	if ok {
+		return processNRGBAFrame(nrgbaFrame, frameNum, totalFrames)
+	}
+
+	return frame
 }
 
-func blendColours(colour1 uint32, colour2 int) int {
-	output := (to8Bit(colour1) + (colour2 / 3)) / 2
+func processNRGBAFrame(frame *image.NRGBA, frameNum int, totalFrames int) *image.Image {
+	newImage := &image.NRGBA{
+		Rect:   frame.Rect,
+		Stride: frame.Stride,
+	}
+	r, g, b := hslToRgb(float64(frameNum)/float64(totalFrames), 1, 0.5)
+	newImage.Pix = processPixArray(frame.Pix, r, g, b)
+	castImage := image.Image(newImage)
+	return &castImage
+}
+
+func processRGBAFrame(frame *image.RGBA, frameNum int, totalFrames int) *image.Image {
+	newImage := &image.RGBA{
+		Rect:   frame.Rect,
+		Stride: frame.Stride,
+	}
+	r, g, b := hslToRgb(float64(frameNum)/float64(totalFrames), 1, 0.5)
+	newImage.Pix = processPixArray(frame.Pix, r, g, b)
+	castImage := image.Image(newImage)
+	return &castImage
+}
+
+func processPixArray(pix []uint8, r uint8, g uint8, b uint8) []uint8 {
+	rgb := []uint8{r, g, b}
+	newPix := make([]uint8, len(pix))
+	for i, pixel := range pix {
+		value := (i + 1) % 4
+		if value == 0 {
+			continue
+		}
+		newPix[i] = blendColours(pixel, rgb[value-1])
+	}
+	return newPix
+}
+
+func processPalettedFrame(frame *image.Paletted, frameNum int, totalFrames int) *image.Image {
+	r, g, b := hslToRgb(float64(frameNum)/float64(totalFrames), 1, 0.5)
+	for i, colour := range frame.Palette {
+		rgbaColour, ok := colour.(color.RGBA)
+		if !ok {
+			continue
+		}
+		frame.Palette[i] = color.RGBA{
+			R: blendColours(rgbaColour.R, r),
+			G: blendColours(rgbaColour.G, g),
+			B: blendColours(rgbaColour.B, b),
+			A: rgbaColour.A,
+		}
+	}
+	castImage := image.Image(frame)
+	return &castImage
+}
+
+func blendColours(colour1 uint8, colour2 uint8) uint8 {
+	output := colour1/2 + colour2/3
 	if output > 255 {
 		return 255
 	}
 	return output
 }
 
-func to8Bit(input uint32) int {
-	// :sadcat:
-	return int(uint8(input))
-}
-
-func hslToRgb(h float64, s float64, l float64) (int, int, int) {
+func hslToRgb(h float64, s float64, l float64) (uint8, uint8, uint8) {
 	if s == 0 {
-		// it's gray
-		return int(l * 255), int(l * 255), int(l * 255)
+		return uint8(l * 255), uint8(l * 255), uint8(l * 255)
 	}
 
 	var v1, v2 float64
@@ -76,7 +136,7 @@ func hslToRgb(h float64, s float64, l float64) (int, int, int) {
 	g := hueToRGB(v1, v2, h)
 	b := hueToRGB(v1, v2, h-(1.0/3.0))
 
-	return int(r * 255), int(g * 255), int(b * 255)
+	return uint8(r * 255), uint8(g * 255), uint8(b * 255)
 }
 
 func hueToRGB(v1, v2, h float64) float64 {
