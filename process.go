@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/getsentry/sentry-go"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
 	"image"
 	"image/color"
 	"image/gif"
@@ -85,6 +86,8 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				processFilter.AfterStacking(filterData, request, component, &frameImages, &frameDelay)
 			}
 		}
+
+		go helper.WriteDebugPNG(*frameImages[0], fmt.Sprintf("comp-%d.frame-0.AfterStacking", comp))
 
 		// Set the component width/height to the width/height of the first frame if it's not currently set
 		if component.Position.Width == 0 {
@@ -256,6 +259,11 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	for i, canvas := range outputContexts {
 		outputImages[i] = canvas.Image()
 	}
+
+	if os.Getenv("DEBUG_DISABLE_RESPONSE") == "1" {
+		return &entity.ImageResult{Error: "debug"}
+	}
+
 	result, extension, length, exception := OutputImage(outputImages, outputDelay, request.Metadata, !shouldDiff)
 	if exception != nil {
 		sentry.CaptureException(exception)
@@ -298,10 +306,12 @@ func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup, num i
 	defer wg.Done()
 	log.Printf("Diff for frame %d has finished", num)
 	image1 := context.Image()
-	for x := 0; x < image1.Bounds().Dx(); x++ {
-		for y := 0; y < image1.Bounds().Dy(); y++ {
+	dx := image1.Bounds().Dx()
+	dy := image1.Bounds().Dy()
+	context.SetRGBA255(0, 0, 0, 0)
+	for x := 0; x < dx; x++ {
+		for y := 0; y < dy; y++ {
 			if coloursEqual(image1.At(x, y), image2.At(x, y)) {
-				context.SetRGBA255(0, 0, 0, 0)
 				context.SetPixel(x, y)
 			}
 		}
@@ -335,7 +345,8 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 		log.Println("Decoding the gif...")
 		gifFile, err := gif.DecodeAll(reader)
 		if err != nil {
-			log.Fatalf("Error decoding gif: %s", err)
+
+			log.Printf("Error decoding gif: %s\n", err)
 			return nil, nil, err
 		}
 		output := make([]*image.Image, len(gifFile.Image))

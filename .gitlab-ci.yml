@@ -2,7 +2,6 @@ stages:
   - build
 
 build:
-  image: docker:stable
   stage: build
   except:
     refs:
@@ -11,8 +10,6 @@ build:
     - master
   tags:
     - shell
-  variables:
-    GOPATH: $CI_PROJECT_DIR/.go
   retry:
     max: 2
     when: runner_system_failure
