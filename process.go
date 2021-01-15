@@ -61,6 +61,24 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			continue
 		}
 
+		if component.Position.X == nil {
+			component.Position.X = float64(0)
+		}
+
+		if component.Position.Y == nil {
+			component.Position.Y = float64(0)
+		}
+
+		if component.Position.Width == nil {
+			component.Position.Width = float64(0)
+		}
+
+		if component.Position.Height == nil {
+			component.Position.Height = float64(0)
+		}
+
+		fmt.Println(component)
+
 		// decide which function to get the image with (explicitly typed)
 		var getImageFunc = getImageURL
 		if component.Local {
@@ -90,12 +108,12 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 		go helper.WriteDebugPNG(*frameImages[0], fmt.Sprintf("comp-%d.frame-0.AfterStacking", comp))
 
 		// Set the component width/height to the width/height of the first frame if it's not currently set
-		if component.Position.Width == 0 {
-			component.Position.Width = (*frameImages[0]).Bounds().Dx()
+		if component.Position.Width == float64(0) {
+			component.Position.Width = float64((*frameImages[0]).Bounds().Dx())
 		}
 
-		if component.Position.Height == 0 {
-			component.Position.Height = (*frameImages[0]).Bounds().Dy()
+		if component.Position.Height == float64(0) {
+			component.Position.Height = float64((*frameImages[0]).Bounds().Dy())
 		}
 
 		componentFrameImages[comp] = frameImages
@@ -185,14 +203,24 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			if frameNum < len(outputContexts) {
 				outputCtx = outputContexts[frameNum]
 			} else {
-				if request.Width == 0 {
-					request.Width = component.Position.Width
+				if request.Width == 0 && component.Position.Width != nil {
+					request.Width = int(component.Position.Width.(float64))
 				}
-				if request.Height == 0 {
-					request.Height = component.Position.Height
+				if request.Height == 0 && component.Position.Height != nil {
+					request.Height = int(component.Position.Height.(float64))
 				}
 				outputCtx = gg.NewContext(request.Width, request.Height)
 				outputContexts = append(outputContexts, outputCtx)
+			}
+
+			if ppw, ok := component.Position.Width.(string); ok {
+				component.Position.Width = helper.GetRelativeDimension(request.Width, ppw)
+				fmt.Println("Transforming width to ", component.Position.Width)
+			}
+
+			if pph, ok := component.Position.Height.(string); ok {
+				component.Position.Height = helper.GetRelativeDimension(request.Height, pph)
+				fmt.Println("Transforming height to ", component.Position.Height)
 			}
 
 			// set the delay for this frame if one doesn't exist yet
@@ -206,7 +234,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			}
 
 			// move the specified component to its target position
-			outputCtx.RotateAbout(component.Rotation, float64(component.Position.X), float64(component.Position.Y))
+			outputCtx.RotateAbout(component.Rotation, component.Position.X.(float64), component.Position.Y.(float64))
 
 			// check if the frame needs to be resized
 			var frameImage *image.RGBA
@@ -218,8 +246,8 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 						Y: 0,
 					},
 					Max: image.Point{
-						X: component.Position.Width,
-						Y: component.Position.Height,
+						X: int(component.Position.Width.(float64)),
+						Y: int(component.Position.Height.(float64)),
 					},
 				}
 
@@ -232,11 +260,11 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				frameImage = inputFrameCtx.Image().(*image.RGBA)
 			}
 
-			log.Printf("Drawing component %d frame %d at %d,%d\n", comp, frameNum, component.Position.X, component.Position.Y)
-			outputCtx.DrawImage(frameImage, component.Position.X, component.Position.Y)
+			log.Printf("Drawing component %d frame %d at %f,%f\n", comp, frameNum, component.Position.X, component.Position.Y)
+			outputCtx.DrawImage(frameImage, int(component.Position.X.(float64)), int(component.Position.Y.(float64)))
 
 			// Reset the rotation
-			outputCtx.RotateAbout(-component.Rotation, float64(component.Position.X), float64(component.Position.Y))
+			outputCtx.RotateAbout(-component.Rotation, component.Position.X.(float64), component.Position.Y.(float64))
 
 			// (Slow) optimisation for animated gifs
 			if shouldDiff && comp == len(request.ImageComponents)-1 {
