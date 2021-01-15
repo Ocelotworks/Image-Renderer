@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/getsentry/sentry-go"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
 	"image"
 	"image/color"
 	"image/gif"
@@ -85,6 +86,8 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				processFilter.AfterStacking(filterData, request, component, &frameImages, &frameDelay)
 			}
 		}
+
+		go helper.WriteDebugPNG(*frameImages[0], fmt.Sprintf("comp-%d.frame-0.AfterStacking", comp))
 
 		// Set the component width/height to the width/height of the first frame if it's not currently set
 		if component.Position.Width == 0 {
@@ -256,6 +259,11 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	for i, canvas := range outputContexts {
 		outputImages[i] = canvas.Image()
 	}
+
+	if os.Getenv("DEBUG_DISABLE_RESPONSE") == "1" {
+		return &entity.ImageResult{Error: "debug"}
+	}
+
 	result, extension, length, exception := OutputImage(outputImages, outputDelay, request.Metadata, !shouldDiff)
 	if exception != nil {
 		sentry.CaptureException(exception)

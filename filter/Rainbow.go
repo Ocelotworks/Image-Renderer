@@ -3,6 +3,7 @@ package filter
 import (
 	"fmt"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
 	"image"
 	"image/color"
 	"sync"
@@ -19,23 +20,18 @@ func (r Rainbow) AfterStacking(filter *entity.Filter, request *entity.ImageReque
 		}
 	}
 
-	var wg sync.WaitGroup
 	totalFrames := len(*images)
 	outputImages := make([]*image.Image, totalFrames)
 	for i, frame := range *images {
-		wg.Add(1)
-		outputImages[i] = processFrame(frame, i, totalFrames, &wg)
-		fmt.Printf("Output: %p, %p\n", frame, outputImages[i])
-
+		outputImages[i] = processFrame(frame, i, totalFrames)
+		helper.WriteDebugPNG(*outputImages[i], fmt.Sprintf("rainbow.%d", i))
 	}
-	wg.Wait()
-	images = &outputImages
+
+	*images = outputImages
 	return
 }
 
-func processFrame(frame *image.Image, frameNum int, totalFrames int, wg *sync.WaitGroup) *image.Image {
-	defer wg.Done()
-
+func processFrame(frame *image.Image, frameNum int, totalFrames int) *image.Image {
 	palettedFrame, ok := (*frame).(*image.Paletted)
 
 	if ok {
@@ -53,6 +49,14 @@ func processFrame(frame *image.Image, frameNum int, totalFrames int, wg *sync.Wa
 	if ok {
 		return processNRGBAFrame(nrgbaFrame, frameNum, totalFrames)
 	}
+
+	yCbCrFrame, ok := (*frame).(*image.YCbCr)
+
+	if ok {
+		return processYCbCrFrame(yCbCrFrame, frameNum, totalFrames)
+	}
+
+	fmt.Printf("Unknown image type: %T\n", *frame)
 
 	return frame
 }
@@ -79,12 +83,14 @@ func processRGBAFrame(frame *image.RGBA, frameNum int, totalFrames int) *image.I
 	return &castImage
 }
 
+// Processes arrays of RGBA pixels
 func processPixArray(pix []uint8, r uint8, g uint8, b uint8) []uint8 {
 	rgb := []uint8{r, g, b}
 	newPix := make([]uint8, len(pix))
 	for i, pixel := range pix {
 		value := (i + 1) % 4
 		if value == 0 {
+			newPix[i] = pix[i]
 			continue
 		}
 		newPix[i] = blendColours(pixel, rgb[value-1])
@@ -97,6 +103,7 @@ func processPalettedFrame(frame *image.Paletted, frameNum int, totalFrames int) 
 	for i, colour := range frame.Palette {
 		rgbaColour, ok := colour.(color.RGBA)
 		if !ok {
+			fmt.Printf("Unsupported palette type: %T\n", colour)
 			continue
 		}
 		frame.Palette[i] = color.RGBA{
@@ -108,6 +115,39 @@ func processPalettedFrame(frame *image.Paletted, frameNum int, totalFrames int) 
 	}
 	castImage := image.Image(frame)
 	return &castImage
+}
+
+// Fuck this format
+func processYCbCrFrame(frame *image.YCbCr, frameNum int, totalFrames int) *image.Image {
+	r, g, b := hslToRgb(float64(frameNum)/float64(totalFrames), 1, 0.5)
+	y, cb, cr := color.RGBToYCbCr(r, g, b)
+	newImage := image.YCbCr{
+		Y:              make([]uint8, len(frame.Y)),
+		Cb:             make([]uint8, len(frame.Cb)),
+		Cr:             make([]uint8, len(frame.Cr)),
+		YStride:        frame.YStride,
+		CStride:        frame.CStride,
+		SubsampleRatio: frame.SubsampleRatio,
+		Rect:           frame.Rect,
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(3)
+	go processYCbCrArray(frame.Y, newImage.Y, y, &wg)
+	go processYCbCrArray(frame.Cb, newImage.Cb, cb, &wg)
+	go processYCbCrArray(frame.Cr, newImage.Cr, cr, &wg)
+
+	wg.Wait()
+	castFrame := image.Image(&newImage)
+	return &castFrame
+}
+
+func processYCbCrArray(arr []uint8, out []uint8, blend uint8, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for i, val := range arr {
+		out[i] = blendColours(val, blend)
+	}
 }
 
 func blendColours(colour1 uint8, colour2 uint8) uint8 {
