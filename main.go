@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/getsentry/sentry-go"
+	"github.com/shirou/gopsutil/cpu"
 	"github.com/streadway/amqp"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
 	"golang.org/x/image/webp"
@@ -32,8 +33,22 @@ func main() {
 		log.Fatalf("Failed to open channel: %s", exception)
 	}
 
+	priority := 0
+
+	cpuInfo, exception := cpu.Info()
+
+	if exception != nil {
+		sentry.CaptureException(exception)
+		log.Println("Couldn't get CPU info:", exception)
+	} else {
+		priority = int(cpuInfo[0].Mhz / 100)
+	}
+
+	log.Println("Consumer priority: ", priority)
+
 	_, exception = channel.QueueDeclare("imageProcessor", false, false, false, false, map[string]interface{}{
 		"x-message-ttl": 60000,
+		"x-priority":    priority,
 	})
 
 	if exception != nil {
