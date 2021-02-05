@@ -6,4 +6,5 @@ type ImageRequest struct {
 	Metadata        *Metadata         `json:"metadata"`
 	Width           int               `json:"width"`
 	Height          int               `json:"height"`
+	Debug           bool              `json:"debug"`
 }

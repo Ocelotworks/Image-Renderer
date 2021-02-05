@@ -146,8 +146,18 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 		frameDelay := componentFrameDelays[comp]
 		componentDelay = frameDelay
 
+		if ppw, ok := component.Position.Width.(string); ok {
+			component.Position.Width = helper.GetRelativeDimension(request.Width, ppw)
+			fmt.Println("Transforming width to ", component.Position.Width)
+		}
+
+		if pph, ok := component.Position.Height.(string); ok {
+			component.Position.Height = helper.GetRelativeDimension(request.Height, pph)
+			fmt.Println("Transforming height to ", component.Position.Height)
+		}
+
 		if len(frameImages) == 0 {
-			ctx := gg.NewContext(request.Width, request.Height)
+			ctx := gg.NewContext(int(component.Position.Width.(float64)), int(component.Position.Height.(float64)))
 			if comp == 0 {
 				if component.Background != "" {
 					ctx.SetHexColor(component.Background)
@@ -213,16 +223,6 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				outputContexts = append(outputContexts, outputCtx)
 			}
 
-			if ppw, ok := component.Position.Width.(string); ok {
-				component.Position.Width = helper.GetRelativeDimension(request.Width, ppw)
-				fmt.Println("Transforming width to ", component.Position.Width)
-			}
-
-			if pph, ok := component.Position.Height.(string); ok {
-				component.Position.Height = helper.GetRelativeDimension(request.Height, pph)
-				fmt.Println("Transforming height to ", component.Position.Height)
-			}
-
 			// set the delay for this frame if one doesn't exist yet
 			if frameNum >= len(outputDelay) {
 				delay := _defaultDelay
@@ -231,6 +231,14 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 					delay = componentDelay[frameNum]
 				}
 				outputDelay = append(outputDelay, delay)
+			}
+
+			if request.Debug {
+				inputFrameCtx.SetLineWidth(10)
+				inputFrameCtx.SetHexColor("#ff0000")
+				inputFrameCtx.DrawRectangle(0, 0, float64(inputFrameCtx.Width()), float64(inputFrameCtx.Height()))
+				inputFrameCtx.Stroke()
+				inputFrameCtx.DrawStringWrapped(fmt.Sprintf("%dx%d", inputFrameCtx.Width(), inputFrameCtx.Height()), float64(inputFrameCtx.Width()), float64(inputFrameCtx.Height()), 1, 1, float64(inputFrameCtx.Width()), 1, gg.AlignLeft)
 			}
 
 			// move the specified component to its target position
