@@ -91,7 +91,7 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, fr
 			return "", "", 0, exception
 		}
 		format = "gif"
-		gifEncode.Observe(float64(time.Since(gifEncodeStart)))
+		gifEncode.Observe(float64(time.Since(gifEncodeStart).Milliseconds()))
 	} else if len(input) == 1 {
 		format = "png"
 		pngEncodeStart := time.Now()
