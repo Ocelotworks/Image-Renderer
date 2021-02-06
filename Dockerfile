@@ -32,4 +32,5 @@ WORKDIR /app
 COPY --from=go-build /src/main /app/
 RUN mkdir /app/res
 COPY --from=go-build /src/res/ /app/res/
+EXPOSE 2112
 ENTRYPOINT ./main

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/getsentry/sentry-go"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
 	"image"
 	"image/color"
@@ -15,6 +17,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/fogleman/gg"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
@@ -31,10 +34,40 @@ var filters = map[string]interface{}{
 	"hyper":     filter.Hyper{},
 }
 
+// Performance metrics
+var (
+	componentStackDuration = promauto.NewSummary(prometheus.SummaryOpts{
+		Namespace: "image_renderer",
+		Name:      "component_stack_duration",
+		Help:      "Duration taken to stack component images",
+	})
+	componentDrawDuration = promauto.NewSummary(prometheus.SummaryOpts{
+		Namespace: "image_renderer",
+		Name:      "component_draw_duration",
+		Help:      "Duration taken to stack component images",
+	})
+	beforeStackingFilterDuration = promauto.NewSummary(prometheus.SummaryOpts{
+		Namespace: "image_renderer",
+		Name:      "filter_before_stacking_duration",
+		Help:      "Duration taken to process BeforeStacking filters",
+	})
+	beforeRenderFilterDuration = promauto.NewSummary(prometheus.SummaryOpts{
+		Namespace: "image_renderer",
+		Name:      "filter_before_render_duration",
+		Help:      "Duration taken to process BeforeRender filters",
+	})
+	frameDiffDuration = promauto.NewSummary(prometheus.SummaryOpts{
+		Namespace: "image_renderer",
+		Name:      "frame_diff_duration",
+		Help:      "Duration taken to diff completed frames",
+	})
+)
+
 // ProcessImage processes an incoming ImageRequest and outputs a finished ImageResult
 func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 
 	for _, component := range request.ImageComponents {
+
 		for _, filterData := range component.Filters {
 			var filterObj interface{}
 			var ok bool
@@ -44,9 +77,12 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				continue
 			}
 			if processFilter, ok := filterObj.(filter.BeforeStacking); ok {
+				beforeStackingStart := time.Now()
 				processFilter.BeforeStacking(request, component, filterData)
+				beforeStackingFilterDuration.Observe(float64(time.Since(beforeStackingStart).Milliseconds()))
 			}
 		}
+
 	}
 
 	componentFrameImages := make([][]*image.Image, len(request.ImageComponents))
@@ -57,6 +93,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 		//wg.Add(1)
 		//go func(comp int, component *entity.ImageComponent) {
 		//defer wg.Done()
+		componentStackStart := time.Now()
 		if component.URL == "" {
 			continue
 		}
@@ -119,6 +156,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 		componentFrameImages[comp] = frameImages
 		componentFrameDelays[comp] = frameDelay
 		//}(comp, component)
+		componentStackDuration.Observe(float64(time.Since(componentStackStart).Milliseconds()))
 	}
 
 	//wg.Done()
@@ -134,7 +172,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	shouldDiff := false
 	// loop over each image component
 	for comp, component := range request.ImageComponents {
-
+		componentDrawStart := time.Now()
 		if component.Background != "" {
 			shouldDiff = true
 		}
@@ -203,7 +241,9 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				}
 				if processFilter, ok := filterObj.(filter.BeforeRender); ok {
 					log.Println("Applying filter", filterObject.Name, filterObject.Arguments)
+					beforeRenderFilterStart := time.Now()
 					processFilter.BeforeRender(inputFrameCtx, filterObject.Arguments, frameNum)
+					beforeRenderFilterDuration.Observe(float64(time.Since(beforeRenderFilterStart).Milliseconds()))
 				}
 
 			}
@@ -285,8 +325,10 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				}
 				unmaskedPrevious = maskCopy
 			}
+			componentDrawDuration.Observe(float64(time.Since(componentDrawStart).Milliseconds()))
 		}
 		log.Println("Waiting for diff to finish...")
+
 		wg.Wait()
 		log.Println("Done!")
 	}
@@ -300,7 +342,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 		return &entity.ImageResult{Error: "debug"}
 	}
 
-	result, extension, length, exception := OutputImage(outputImages, outputDelay, request.Metadata, !shouldDiff)
+	result, extension, length, exception := OutputImage(outputImages, outputDelay, request.Metadata, !shouldDiff, request.Compression)
 	if exception != nil {
 		sentry.CaptureException(exception)
 		return &entity.ImageResult{Error: "output"}
@@ -340,6 +382,7 @@ func getLocalImage(url string) ([]*image.Image, []int, error) {
 // Erases pixels on `context` that are different to those on `image2`
 func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup, num int) {
 	defer wg.Done()
+	diffMaskStart := time.Now()
 	log.Printf("Diff for frame %d has finished", num)
 	image1 := context.Image()
 	dx := image1.Bounds().Dx()
@@ -352,6 +395,7 @@ func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup, num i
 			}
 		}
 	}
+	frameDiffDuration.Observe(float64(time.Since(diffMaskStart).Milliseconds()))
 }
 
 func coloursEqual(colour1 color.Color, colour2 color.Color) bool {

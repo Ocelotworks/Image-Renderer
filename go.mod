@@ -10,6 +10,7 @@ require (
 	github.com/getsentry/sentry-go v0.9.0
 	github.com/go-ole/go-ole v1.2.5 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
+	github.com/prometheus/client_golang v1.9.0
 	github.com/shirou/gopsutil v3.20.12+incompatible
 	github.com/streadway/amqp v1.0.0
 	github.com/stretchr/testify v1.4.0

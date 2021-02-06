@@ -4,14 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/getsentry/sentry-go"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/streadway/amqp"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
 	"golang.org/x/image/webp"
 	"image"
 	"log"
+	"net/http"
 	"os"
 )
+
+var messagesProcessed = promauto.NewCounter(prometheus.CounterOpts{
+	Namespace: "image_renderer",
+	Name:      "messages_processed",
+	Help:      "The total number of processed messages",
+})
 
 func main() {
 
@@ -71,9 +81,13 @@ func main() {
 
 	go func() {
 		for messageData := range messages {
+			messagesProcessed.Inc()
 			go processMessage(messageData, channel)
 		}
 	}()
+
+	http.Handle("/metrics", promhttp.Handler())
+	_ = http.ListenAndServe(":2112", nil)
 
 	<-forever
 }
