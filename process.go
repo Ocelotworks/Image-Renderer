@@ -88,11 +88,8 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	componentFrameImages := make([][]*image.Image, len(request.ImageComponents))
 	componentFrameDelays := make([][]int, len(request.ImageComponents))
 
-	//var wg sync.WaitGroup
+	// Load each component's reconstructed frames into an array for each component
 	for comp, component := range request.ImageComponents {
-		//wg.Add(1)
-		//go func(comp int, component *entity.ImageComponent) {
-		//defer wg.Done()
 		componentStackStart := time.Now()
 		if component.URL == "" {
 			continue
@@ -155,11 +152,8 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 
 		componentFrameImages[comp] = frameImages
 		componentFrameDelays[comp] = frameDelay
-		//}(comp, component)
 		componentStackDuration.Observe(float64(time.Since(componentStackStart).Milliseconds()))
 	}
-
-	//wg.Done()
 
 	// holds all the contexts for each frame of the final output image
 	outputContexts := make([]*gg.Context, 0)
@@ -167,13 +161,16 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	// the delay for each frame of the output image
 	var outputDelay []int
 
+	// The fully intact previous frame, used to determine what has changed in the next frame
 	var unmaskedPrevious image.Image
 
+	// Used to determine if the diff should be calculated
 	shouldDiff := false
-	// loop over each image component
+
 	for comp, component := range request.ImageComponents {
 		componentDrawStart := time.Now()
-		if component.Background != "" {
+		// Only components with a background should be diffed
+		if component.URL != "" && component.Background != "" {
 			shouldDiff = true
 		}
 
@@ -184,6 +181,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 		frameDelay := componentFrameDelays[comp]
 		componentDelay = frameDelay
 
+		// Check for relative width/height and set to the correct value
 		if ppw, ok := component.Position.Width.(string); ok {
 			component.Position.Width = helper.GetRelativeDimension(request.Width, ppw)
 			fmt.Println("Transforming width to ", component.Position.Width)
@@ -194,6 +192,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			fmt.Println("Transforming height to ", component.Position.Height)
 		}
 
+		// If there are no frames in this image, create a new blank context of the correct width/height
 		if len(frameImages) == 0 {
 			ctx := gg.NewContext(int(component.Position.Width.(float64)), int(component.Position.Height.(float64)))
 			if comp == 0 {
@@ -230,22 +229,25 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			// loop over a gif and apply it to all canvases (or apply a static image to every frame)
 			inputFrameCtx := frameContexts[frameNum%len(frameContexts)]
 
-			// apply any filters set for the component
-			for _, filterObject := range component.Filters {
-				// check the filter exists and apply it
-				var filterObj interface{}
-				var ok bool
-				if filterObj, ok = filters[filterObject.Name]; !ok {
-					log.Println("Unknown filter type", filterObject)
-					continue
-				}
-				if processFilter, ok := filterObj.(filter.BeforeRender); ok {
-					log.Println("Applying filter", filterObject.Name, filterObject.Arguments)
-					beforeRenderFilterStart := time.Now()
-					processFilter.BeforeRender(inputFrameCtx, filterObject.Arguments, frameNum)
-					beforeRenderFilterDuration.Observe(float64(time.Since(beforeRenderFilterStart).Milliseconds()))
-				}
+			// Only apply the filter to the first frame of animated GIFs
+			if frameNum == 0 || len(frameContexts) > 1 {
+				// apply any filters set for the component
+				for _, filterObject := range component.Filters {
+					// check the filter exists and apply it
+					var filterObj interface{}
+					var ok bool
+					if filterObj, ok = filters[filterObject.Name]; !ok {
+						log.Println("Unknown filter type", filterObject)
+						continue
+					}
+					if processFilter, ok := filterObj.(filter.BeforeRender); ok {
+						log.Println("Applying filter", filterObject.Name, filterObject.Arguments)
+						beforeRenderFilterStart := time.Now()
+						processFilter.BeforeRender(inputFrameCtx, filterObject.Arguments, frameNum)
+						beforeRenderFilterDuration.Observe(float64(time.Since(beforeRenderFilterStart).Milliseconds()))
+					}
 
+				}
 			}
 
 			// check if there is an existing context for this frame
@@ -447,9 +449,10 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 			// draw onto the frame background, where frameBg is:
 			//  - DisposalNone: sum of previous frames
 			//  - DisposalBackground or DisposalPrevious: blank
-			draw.Draw(frameBg, frameBg.Bounds(), img, image.Point{X: 0, Y: 0}, draw.Over)
-
+			//draw.Draw(frameBg, frameBg.Bounds(), img, image.Point{X: 0, Y: 0}, draw.Over)
+			draw.Copy(frameBg, image.Point{X: 0, Y: 0}, img, img.Bounds(), draw.Over, &draw.Options{})
 			clone := image.NewPaletted(frameBg.Bounds(), img.Palette)
+
 			draw.Draw(clone, clone.Bounds(), frameBg, image.Point{X: 0, Y: 0}, draw.Src)
 
 			genericImage := image.Image(clone)

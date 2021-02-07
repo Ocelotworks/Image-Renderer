@@ -147,6 +147,7 @@ func quantizeWorker(frameNum int, img image.Image, wg *sync.WaitGroup, output []
 	quantizer := q.MedianCutQuantizer{AddTransparent: true}
 	qPalette := quantizer.Quantize(make([]color.Color, 0, 256), img)
 	palettedImage := image.NewPaletted(img.Bounds(), qPalette)
+
 	draw.Draw(palettedImage, img.Bounds(), img, image.Point{X: 0, Y: 0}, draw.Src)
 
 	output[frameNum] = palettedImage

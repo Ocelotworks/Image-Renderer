@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
@@ -15,6 +16,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime/pprof"
+	"time"
 )
 
 var messagesProcessed = promauto.NewCounter(prometheus.CounterOpts{
@@ -23,7 +26,10 @@ var messagesProcessed = promauto.NewCounter(prometheus.CounterOpts{
 	Help:      "The total number of processed messages",
 })
 
+var cpuprofile = flag.Bool("cpuprofile", false, "enable CPU profiling")
+
 func main() {
+	flag.Parse()
 
 	_ = sentry.Init(sentry.ClientOptions{})
 
@@ -93,6 +99,14 @@ func main() {
 }
 
 func processMessage(messageData amqp.Delivery, channel *amqp.Channel) {
+	if *cpuprofile {
+		f, exception := os.Create(fmt.Sprintf("cpu-%d.prof", time.Now().Unix()))
+		if exception != nil {
+			log.Fatal(exception)
+		}
+		_ = pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	log.Printf("Received Message: %s", messageData.Body)
 	imageRequest := entity.ImageRequest{}
 	exception := json.Unmarshal(messageData.Body, &imageRequest)
