@@ -45,6 +45,10 @@ func (r Text) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNu
 	//ctx.DrawPoint(args["ax"].(float64), args["ay"].(float64), 25)
 	//ctx.Fill()
 
+	if args["w"] == 0 {
+		args["w"] = ctx.Width()
+	}
+
 	ctx.SetHexColor(args["colour"].(string))
 	_ = ctx.LoadFontFace(path.Join("res/font/", args["font"].(string)), args["fontSize"].(float64))
 
