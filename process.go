@@ -36,6 +36,11 @@ var filters = map[string]interface{}{
 
 // Performance metrics
 var (
+	processDuration = promauto.NewSummary(prometheus.SummaryOpts{
+		Namespace: "image_renderer",
+		Name:      "process_duration",
+		Help:      "Duration taken for the entire processing",
+	})
 	componentStackDuration = promauto.NewSummary(prometheus.SummaryOpts{
 		Namespace: "image_renderer",
 		Name:      "component_stack_duration",
@@ -65,7 +70,7 @@ var (
 
 // ProcessImage processes an incoming ImageRequest and outputs a finished ImageResult
 func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
-
+	processDurationStart := time.Now()
 	for _, component := range request.ImageComponents {
 
 		for _, filterData := range component.Filters {
@@ -345,6 +350,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	}
 
 	result, extension, length, exception := OutputImage(outputImages, outputDelay, request.Metadata, !shouldDiff, request.Compression)
+	processDuration.Observe(float64(time.Since(processDurationStart).Milliseconds()))
 	if exception != nil {
 		sentry.CaptureException(exception)
 		return &entity.ImageResult{Error: "output"}
