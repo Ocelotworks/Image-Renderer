@@ -13,8 +13,8 @@ func (r Hyper) AfterStacking(filter *entity.Filter, request *entity.ImageRequest
 	outputDelays := make([]int, len(*delays))
 	for i, delay := range *delays {
 		// GIF rendering ignores delays of 1 and instead uses default. Wooo gifs
-		if delay > 2 {
-			outputDelays[i] = int(math.Min(float64(delay/2), float64(1)))
+		if delay > 10 {
+			outputDelays[i] = int(math.Min(float64(delay/2), float64(10)))
 		}
 	}
 	*delays = outputDelays
