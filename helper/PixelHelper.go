@@ -1,40 +1,93 @@
 package helper
 
 import (
+	"fmt"
 	"image"
+	"image/color"
+	"sync"
 )
 
-func ForEveryPixel(img image.Image, iterator func(x int, y int, r uint8, b uint8, g uint8, a uint8)) image.Image {
-	palettedImage, ok := img.(*image.Paletted)
-	if ok {
-		return forEveryPalettedPixel(palettedImage, iterator)
+func ProcessFrame(frame *image.Image,
+	rgbCallback func(subPixel uint8, index int) uint8,
+	palettedCallback func(palette color.Color, index int) color.Color,
+	ycbcrCallback func(arr []uint8, out []uint8, wg *sync.WaitGroup, index int)) *image.Image {
+	switch (*frame).(type) {
+	case *image.Paletted:
+		return ProcessPalettedFrame((*frame).(*image.Paletted), palettedCallback)
+	case *image.RGBA:
+		return ProcessRGBAFrame((*frame).(*image.RGBA), rgbCallback)
+	case *image.NRGBA:
+		return ProcessNRGBAFrame((*frame).(*image.NRGBA), rgbCallback)
+	case *image.YCbCr:
+		return ProcessYCbCrFrame((*frame).(*image.YCbCr), ycbcrCallback)
+	default:
+		fmt.Printf("Unknown image type: %T\n", *frame)
+		return frame
 	}
-
-	return img
-
-	//dx := img.Bounds().Dx()
-	//dy := img.Bounds().Dy()
-	//for x := 0; x < dx; x++ {
-	//	for y := 0; y < dy; y++ {
-	//		i := rgbaImage.PixOffset(x, y)
-	//		pixel := rgbaImage.Pix[i : i+4 : i+4]
-	//		iterator(x, y, pixel[0], pixel[1], pixel[2], pixel[3])
-	//	}
-	//}
-	//return img
 }
 
-func forEveryPalettedPixel(img *image.Paletted, iterator func(x int, y int, r uint8, b uint8, g uint8, a uint8)) image.Image {
-
-	dx := img.Bounds().Dx()
-	dy := img.Bounds().Dy()
-
-	for x := 0; x < dx; x++ {
-		for y := 0; y < dy; y++ {
-			i := img.PixOffset(x, y)
-			pixel := img.Pix[i : i+4 : i+4]
-			iterator(x, y, pixel[0], pixel[1], pixel[2], pixel[3])
-		}
+func ProcessNRGBAFrame(frame *image.NRGBA, callback func(subPixel uint8, index int) uint8) *image.Image {
+	newImage := &image.NRGBA{
+		Rect:   frame.Rect,
+		Stride: frame.Stride,
 	}
-	return img
+	newImage.Pix = ProcessPixArray(frame.Pix, callback)
+	castImage := image.Image(newImage)
+	return &castImage
+}
+
+func ProcessRGBAFrame(frame *image.RGBA, callback func(subPixel uint8, index int) uint8) *image.Image {
+	newImage := &image.RGBA{
+		Rect:   frame.Rect,
+		Stride: frame.Stride,
+	}
+	newImage.Pix = ProcessPixArray(frame.Pix, callback)
+	castImage := image.Image(newImage)
+	return &castImage
+}
+
+// Processes arrays of RGBA pixels
+func ProcessPixArray(pix []uint8, callback func(subPixel uint8, index int) uint8) []uint8 {
+	newPix := make([]uint8, len(pix))
+	for i, subPixel := range pix {
+		value := (i + 1) % 4
+		if value == 0 {
+			newPix[i] = pix[i]
+			continue
+		}
+		newPix[i] = callback(subPixel, i)
+	}
+	return newPix
+}
+
+func ProcessPalettedFrame(frame *image.Paletted, callback func(palette color.Color, index int) color.Color) *image.Image {
+	for i, colour := range frame.Palette {
+		frame.Palette[i] = callback(colour, i)
+	}
+	castImage := image.Image(frame)
+	return &castImage
+}
+
+// Fuck this format
+func ProcessYCbCrFrame(frame *image.YCbCr, callback func(arr []uint8, out []uint8, wg *sync.WaitGroup, index int)) *image.Image {
+	newImage := image.YCbCr{
+		Y:              make([]uint8, len(frame.Y)),
+		Cb:             make([]uint8, len(frame.Cb)),
+		Cr:             make([]uint8, len(frame.Cr)),
+		YStride:        frame.YStride,
+		CStride:        frame.CStride,
+		SubsampleRatio: frame.SubsampleRatio,
+		Rect:           frame.Rect,
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(3)
+	go callback(frame.Y, newImage.Y, &wg, 0)
+	go callback(frame.Cb, newImage.Cb, &wg, 1)
+	go callback(frame.Cr, newImage.Cr, &wg, 2)
+
+	wg.Wait()
+	castFrame := image.Image(&newImage)
+	return &castFrame
 }

@@ -403,6 +403,7 @@ func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup, num i
 			}
 		}
 	}
+
 	frameDiffDuration.Observe(float64(time.Since(diffMaskStart).Milliseconds()))
 }
 
