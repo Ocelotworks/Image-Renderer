@@ -32,6 +32,7 @@ var filters = map[string]interface{}{
 	"text":      filter.Text{},
 	"rainbow":   filter.Rainbow{},
 	"hyper":     filter.Hyper{},
+	"animate":   filter.Animate{},
 }
 
 // Performance metrics
@@ -248,7 +249,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 					if processFilter, ok := filterObj.(filter.BeforeRender); ok {
 						log.Println("Applying filter", filterObject.Name, filterObject.Arguments)
 						beforeRenderFilterStart := time.Now()
-						processFilter.BeforeRender(inputFrameCtx, filterObject.Arguments, frameNum)
+						processFilter.BeforeRender(inputFrameCtx, filterObject.Arguments, frameNum, component)
 						beforeRenderFilterDuration.Observe(float64(time.Since(beforeRenderFilterStart).Milliseconds()))
 					}
 

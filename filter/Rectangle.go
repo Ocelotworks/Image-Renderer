@@ -2,11 +2,12 @@ package filter
 
 import (
 	"github.com/fogleman/gg"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
 )
 
 type Rectangle struct{}
 
-func (r Rectangle) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNum int) *gg.Context {
+func (r Rectangle) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNum int, component *entity.ImageComponent) *gg.Context {
 	colour, ok := args["colour"].(string)
 	if ok {
 		ctx.SetHexColor(colour)

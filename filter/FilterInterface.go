@@ -7,7 +7,7 @@ import (
 )
 
 type BeforeRender interface {
-	BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNum int) *gg.Context
+	BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNum int, component *entity.ImageComponent) *gg.Context
 }
 
 type BeforeStacking interface {
