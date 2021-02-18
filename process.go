@@ -459,10 +459,10 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 			//  - DisposalBackground or DisposalPrevious: blank
 			//draw.Draw(frameBg, frameBg.Bounds(), img, image.Point{X: 0, Y: 0}, draw.Over)
 			draw.Copy(frameBg, image.Point{X: 0, Y: 0}, img, img.Bounds(), draw.Over, &draw.Options{})
-			//clone := image.NewPaletted(frameBg.Bounds(), img.Palette)
-			//draw.Draw(clone, clone.Bounds(), frameBg, image.Point{X: 0, Y: 0}, draw.Src)
+			clone := image.NewPaletted(frameBg.Bounds(), img.Palette)
+			draw.Draw(clone, clone.Bounds(), frameBg, image.Point{X: 0, Y: 0}, draw.Src)
 
-			clone := frameBg
+			//clone := frameBg
 
 			genericImage := image.Image(clone)
 			output[i] = &genericImage
