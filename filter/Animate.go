@@ -1,7 +1,6 @@
 package filter
 
 import (
-	"fmt"
 	"github.com/fogleman/gg"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
 	"image"
@@ -10,13 +9,19 @@ import (
 type Animate struct{}
 
 func (a Animate) AfterStacking(filter *entity.Filter, request *entity.ImageRequest, component *entity.ImageComponent, images *[]*image.Image, delays *[]int) {
-	fmt.Println("Filter: ", filter)
-	imageDeficit := len(filter.Arguments["frames"].([]interface{})) - len(*images)
+	imageDeficit := float64(len(filter.Arguments["frames"].([]interface{})) - len(*images))
 	i := 0
+
+	delay := 5
+
+	if filter.Arguments["delay"] != nil {
+		delay = int(filter.Arguments["delay"].(float64))
+	}
+
 	for imageDeficit > 0 {
 		*images = append(*images, (*images)[i%len(*images)])
 		if len(*delays) == 0 {
-			*delays = []int{5}
+			*delays = []int{delay}
 		}
 		*delays = append(*delays, (*delays)[i%len(*delays)])
 		i++
@@ -29,10 +34,18 @@ func (a Animate) BeforeRender(ctx *gg.Context, args map[string]interface{}, fram
 
 	animFrame := animFrames[frameNum%len(animFrames)].(map[string]interface{})
 
-	component.Position.X = animFrame["x"]
-	component.Position.Y = animFrame["y"]
-	component.Position.Width = animFrame["w"]
-	component.Position.Height = animFrame["h"]
+	if animFrame["x"] != nil {
+		component.Position.X = animFrame["x"]
+	}
+	if animFrame["y"] != nil {
+		component.Position.Y = animFrame["y"]
+	}
+	if animFrame["w"] != nil {
+		component.Position.Width = animFrame["w"]
+	}
+	if animFrame["h"] != nil {
+		component.Position.Height = animFrame["h"]
+	}
 	if animFrame["background"] != nil {
 		component.Background = animFrame["background"].(string)
 	}
