@@ -14,7 +14,6 @@ import (
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
 	"image"
 	"image/color"
-	"image/draw"
 	"image/gif"
 	"image/png"
 	"log"
@@ -68,6 +67,7 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, fr
 		}
 
 		wg.Wait()
+		log.Println("Finished Quantizing")
 
 		firstFrame := images[0]
 		bounds := firstFrame.Bounds()
@@ -121,6 +121,7 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, fr
 	originalLength := buf.Len() / 1000000
 
 	if compression {
+		log.Println("Compressing output...")
 		compressionStart := time.Now()
 		var compressedBuf bytes.Buffer
 		gz := gzip.NewWriter(&compressedBuf)
@@ -129,6 +130,7 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, fr
 
 		if exception == nil && gz.Close() == nil {
 			compress.Observe(float64(time.Since(compressionStart).Milliseconds()))
+			log.Println("Finished Compressing")
 			return base64.StdEncoding.EncodeToString(compressedBuf.Bytes()), "gzip/" + format, originalLength, nil
 		}
 		fmt.Println("failed to compress: ", exception)
@@ -141,14 +143,29 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, fr
 func quantizeWorker(frameNum int, img image.Image, wg *sync.WaitGroup, output []*image.Paletted) {
 	defer wg.Done()
 
+	rgbaImage := img.(*image.RGBA)
+
 	log.Printf("Quantizing frame %d...", frameNum)
 
 	// quantize the frame to a paletted image
 	quantizer := q.MedianCutQuantizer{AddTransparent: true}
 	qPalette := quantizer.Quantize(make([]color.Color, 0, 256), img)
+
 	palettedImage := image.NewPaletted(img.Bounds(), qPalette)
 
-	draw.Draw(palettedImage, img.Bounds(), img, image.Point{X: 0, Y: 0}, draw.Src)
+	// Convert the RGBA image into a PNG
+	for i := range rgbaImage.Pix {
+		// Grab the first 4
+		if i%4 != 0 {
+			continue
+		}
+		palettedImage.Pix[i/4] = uint8(qPalette.Index(color.RGBA{
+			R: rgbaImage.Pix[i],
+			G: rgbaImage.Pix[i+1],
+			B: rgbaImage.Pix[i+2],
+			A: rgbaImage.Pix[i+3],
+		}))
+	}
 
 	output[frameNum] = palettedImage
 }

@@ -190,11 +190,20 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 
 		// Convert the gif into a series of NRGBA frames
 		for i, img := range gifFile.Image {
-			// TODO: This seems to ignore disposal modes, but it's much faster and doesn't seem to cause any problems (yet)
-			frameBg = image.NewNRGBA(img.Bounds())
+			disposalMethod := gifFile.Disposal[i]
+			// Depending on the disposal method, reset frameBg to a blank slate
+			//  - DisposalNone: sum of previous frames
+			//  - DisposalBackground or DisposalPrevious: blank
+			if disposalMethod != 0 && disposalMethod != gif.DisposalNone {
+				frameBg = image.NewNRGBA(img.Bounds())
+			}
 			// Iterate over the palette image, converting it into sets of RGBA bytes
 			for i, colour := range img.Pix {
 				r, g, b, a := img.Palette[colour].RGBA()
+				// Skip drawing transparent pixels to avoid overwriting the previous frame in those Disposal modes
+				if a == 0 {
+					continue
+				}
 				// Each pixel contains 4 bytes
 				p := i * 4
 				frameBg.Pix[p] = uint8(r)
@@ -202,7 +211,11 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 				frameBg.Pix[p+2] = uint8(b)
 				frameBg.Pix[p+3] = uint8(a)
 			}
-			genericImage := image.Image(frameBg)
+			// Set the output to a clone of the current state of frameBg
+			// Copy the pix array for speed
+			clone := image.NewNRGBA(frameBg.Bounds())
+			copy(clone.Pix, frameBg.Pix)
+			genericImage := image.Image(clone)
 			output[i] = &genericImage
 		}
 		return output, gifFile.Delay, nil
