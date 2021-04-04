@@ -1,39 +1,24 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/stage"
 	"image"
-	"image/color"
-	"image/gif"
-	"io"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
-	"path"
 	"sync"
 	"time"
 
 	"github.com/fogleman/gg"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/filter"
-	"golang.org/x/image/draw"
 )
 
 const _defaultDelay = 10
-
-var filters = map[string]interface{}{
-	"rectangle": filter.Rectangle{},
-	"text":      filter.Text{},
-	"rainbow":   filter.Rainbow{},
-	"hyper":     filter.Hyper{},
-	"animate":   filter.Animate{},
-}
 
 // Performance metrics
 var (
@@ -42,123 +27,30 @@ var (
 		Name:      "process_duration",
 		Help:      "Duration taken for the entire processing",
 	})
-	componentStackDuration = promauto.NewSummary(prometheus.SummaryOpts{
-		Namespace: "image_renderer",
-		Name:      "component_stack_duration",
-		Help:      "Duration taken to stack component images",
-	})
+
 	componentDrawDuration = promauto.NewSummary(prometheus.SummaryOpts{
 		Namespace: "image_renderer",
 		Name:      "component_draw_duration",
 		Help:      "Duration taken to stack component images",
 	})
-	beforeStackingFilterDuration = promauto.NewSummary(prometheus.SummaryOpts{
-		Namespace: "image_renderer",
-		Name:      "filter_before_stacking_duration",
-		Help:      "Duration taken to process BeforeStacking filters",
-	})
+
 	beforeRenderFilterDuration = promauto.NewSummary(prometheus.SummaryOpts{
 		Namespace: "image_renderer",
 		Name:      "filter_before_render_duration",
 		Help:      "Duration taken to process BeforeRender filters",
-	})
-	frameDiffDuration = promauto.NewSummary(prometheus.SummaryOpts{
-		Namespace: "image_renderer",
-		Name:      "frame_diff_duration",
-		Help:      "Duration taken to diff completed frames",
 	})
 )
 
 // ProcessImage processes an incoming ImageRequest and outputs a finished ImageResult
 func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 	processDurationStart := time.Now()
-	for _, component := range request.ImageComponents {
 
-		for _, filterData := range component.Filters {
-			var filterObj interface{}
-			var ok bool
-			if filterObj, ok = filters[filterData.Name]; !ok {
-				log.Println("Unknown filter type", filterData)
-				sentry.CaptureMessage(fmt.Sprintf("Unknown filter type '%s'", filterData))
-				continue
-			}
-			if processFilter, ok := filterObj.(filter.BeforeStacking); ok {
-				beforeStackingStart := time.Now()
-				processFilter.BeforeStacking(request, component, filterData)
-				beforeStackingFilterDuration.Observe(float64(time.Since(beforeStackingStart).Milliseconds()))
-			}
-		}
+	stage.ProcessBeforeStackingFilters(request)
 
-	}
+	componentFrameDelays, componentFrameImages, exception := stage.MapComponentFrames(request)
 
-	componentFrameImages := make([][]*image.Image, len(request.ImageComponents))
-	componentFrameDelays := make([][]int, len(request.ImageComponents))
-
-	// Load each component's reconstructed frames into an array for each component
-	for comp, component := range request.ImageComponents {
-		componentStackStart := time.Now()
-		if component.URL == "" {
-			continue
-		}
-
-		if component.Position.X == nil {
-			component.Position.X = float64(0)
-		}
-
-		if component.Position.Y == nil {
-			component.Position.Y = float64(0)
-		}
-
-		if component.Position.Width == nil {
-			component.Position.Width = float64(0)
-		}
-
-		if component.Position.Height == nil {
-			component.Position.Height = float64(0)
-		}
-
-		fmt.Println(component)
-
-		// decide which function to get the image with (explicitly typed)
-		var getImageFunc = getImageURL
-		if component.Local {
-			getImageFunc = getLocalImage
-		}
-
-		// get the image, returns all the frames if the image is a gif
-		frameImages, frameDelay, exception := getImageFunc(component.URL)
-		if exception != nil {
-			log.Println("Unable to get image:", exception)
-			sentry.CaptureException(exception)
-			return &entity.ImageResult{Error: "get_image"}
-		}
-
-		for _, filterData := range component.Filters {
-			var filterObj interface{}
-			var ok bool
-			if filterObj, ok = filters[filterData.Name]; !ok {
-				log.Println("Unknown filter type", filterData)
-				continue
-			}
-			if processFilter, ok := filterObj.(filter.AfterStacking); ok {
-				processFilter.AfterStacking(filterData, request, component, &frameImages, &frameDelay)
-			}
-		}
-
-		go helper.WriteDebugPNG(*frameImages[0], fmt.Sprintf("comp-%d.frame-0.AfterStacking", comp))
-
-		// Set the component width/height to the width/height of the first frame if it's not currently set
-		if component.Position.Width == float64(0) {
-			component.Position.Width = float64((*frameImages[0]).Bounds().Dx())
-		}
-
-		if component.Position.Height == float64(0) {
-			component.Position.Height = float64((*frameImages[0]).Bounds().Dy())
-		}
-
-		componentFrameImages[comp] = frameImages
-		componentFrameDelays[comp] = frameDelay
-		componentStackDuration.Observe(float64(time.Since(componentStackStart).Milliseconds()))
+	if exception != nil {
+		return &entity.ImageResult{Error: "get_image"}
 	}
 
 	// holds all the contexts for each frame of the final output image
@@ -166,9 +58,6 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 
 	// the delay for each frame of the output image
 	var outputDelay []int
-
-	// The fully intact previous frame, used to determine what has changed in the next frame
-	var unmaskedPrevious image.Image
 
 	// Used to determine if the diff should be calculated
 	shouldDiff := false
@@ -242,7 +131,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 					// check the filter exists and apply it
 					var filterObj interface{}
 					var ok bool
-					if filterObj, ok = filters[filterObject.Name]; !ok {
+					if filterObj, ok = filter.Filters[filterObject.Name]; !ok {
 						log.Println("Unknown filter type", filterObject)
 						continue
 					}
@@ -289,49 +178,11 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 				inputFrameCtx.DrawStringWrapped(fmt.Sprintf("%dx%d", inputFrameCtx.Width(), inputFrameCtx.Height()), float64(inputFrameCtx.Width()), float64(inputFrameCtx.Height()), 1, 1, float64(inputFrameCtx.Width()), 1, gg.AlignLeft)
 			}
 
-			// move the specified component to its target position
-			outputCtx.RotateAbout(component.Rotation, component.Position.X.(float64), component.Position.Y.(float64))
-
-			// check if the frame needs to be resized
-			var frameImage *image.RGBA
-			if component.Position.Width != inputFrameCtx.Width() || component.Position.Height != inputFrameCtx.Height() {
-				// make a rectangle with the target bounds
-				newSize := image.Rectangle{
-					Min: image.Point{
-						X: 0,
-						Y: 0,
-					},
-					Max: image.Point{
-						X: int(component.Position.Width.(float64)),
-						Y: int(component.Position.Height.(float64)),
-					},
-				}
-
-				log.Println("New size:", newSize)
-				frameImage = image.NewRGBA(newSize)
-
-				// scale the image
-				draw.BiLinear.Scale(frameImage, frameImage.Bounds(), inputFrameCtx.Image(), inputFrameCtx.Image().Bounds(), draw.Over, &draw.Options{})
-			} else {
-				frameImage = inputFrameCtx.Image().(*image.RGBA)
-			}
-
-			log.Printf("Drawing component %d frame %d at %f,%f\n", comp, frameNum, component.Position.X, component.Position.Y)
-			outputCtx.DrawImage(frameImage, int(component.Position.X.(float64)), int(component.Position.Y.(float64)))
-
-			// Reset the rotation
-			outputCtx.RotateAbout(-component.Rotation, component.Position.X.(float64), component.Position.Y.(float64))
+			stage.RotateAndResize(inputFrameCtx, outputCtx, component)
 
 			// (Slow) optimisation for animated gifs
 			if shouldDiff && comp == len(request.ImageComponents)-1 {
-				// The image must be copied here, to avoid using the mask as the unmasked previous frame
-				maskCopy := image.NewRGBA(outputCtx.Image().Bounds())
-				draw.Copy(maskCopy, image.Point{X: 0, Y: 0}, outputCtx.Image(), outputCtx.Image().Bounds(), draw.Src, nil)
-				if frameNum > 0 {
-					wg.Add(1)
-					go diffMask(outputCtx, unmaskedPrevious, &wg, frameNum)
-				}
-				unmaskedPrevious = maskCopy
+				stage.GIFOptimise(outputCtx, frameNum, &wg)
 			}
 			componentDrawDuration.Observe(float64(time.Since(componentDrawStart).Milliseconds()))
 		}
@@ -368,111 +219,4 @@ func max(i, i2 int) int {
 		return i2
 	}
 	return i
-}
-
-func getImageURL(url string) ([]*image.Image, []int, error) {
-	response, err := http.Get(url)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer response.Body.Close()
-	return getImage(response.Body)
-}
-
-func getLocalImage(url string) ([]*image.Image, []int, error) {
-	file, err := os.Open(path.Join("res", url))
-	if err != nil {
-		return nil, nil, err
-	}
-	defer file.Close()
-	return getImage(file)
-}
-
-// Erases pixels on `context` that are different to those on `image2`
-func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup, num int) {
-	defer wg.Done()
-	diffMaskStart := time.Now()
-	log.Printf("Diff for frame %d has finished", num)
-	image1 := context.Image()
-	dx := image1.Bounds().Dx()
-	dy := image1.Bounds().Dy()
-	context.SetRGBA255(0, 0, 0, 0)
-	for x := 0; x < dx; x++ {
-		for y := 0; y < dy; y++ {
-			if coloursEqual(image1.At(x, y), image2.At(x, y)) {
-				context.SetPixel(x, y)
-			}
-		}
-	}
-
-	frameDiffDuration.Observe(float64(time.Since(diffMaskStart).Milliseconds()))
-}
-
-func coloursEqual(colour1 color.Color, colour2 color.Color) bool {
-	r1, b1, g1, a1 := colour1.RGBA()
-	r2, b2, g2, a2 := colour2.RGBA()
-	return r1 == r2 && b1 == b2 && g1 == g2 && a1 == a2
-}
-
-func getImage(input io.Reader) ([]*image.Image, []int, error) {
-	body, err := ioutil.ReadAll(input)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	reader := bytes.NewReader(body)
-	_, format, err := image.DecodeConfig(reader)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	_, err = reader.Seek(0, 0)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if format == "gif" {
-		log.Println("Decoding the gif...")
-		gifFile, err := gif.DecodeAll(reader)
-		if err != nil {
-
-			log.Printf("Error decoding gif: %s\n", err)
-			return nil, nil, err
-		}
-		output := make([]*image.Image, len(gifFile.Image))
-
-		log.Println("Stacking frames...")
-		// use tmp to hold a stacked version of the frame
-		firstFrame := gifFile.Image[0]
-		frameBg := image.NewNRGBA(firstFrame.Bounds())
-
-		for i, img := range gifFile.Image {
-			disposalMethod := gifFile.Disposal[i]
-
-			if disposalMethod != 0 && disposalMethod != gif.DisposalNone {
-				// clear the frame background if set to dispose the last frame
-				frameBg = image.NewNRGBA(img.Bounds())
-			}
-
-			// draw onto the frame background, where frameBg is:
-			//  - DisposalNone: sum of previous frames
-			//  - DisposalBackground or DisposalPrevious: blank
-			//draw.Draw(frameBg, frameBg.Bounds(), img, image.Point{X: 0, Y: 0}, draw.Over)
-			draw.Copy(frameBg, image.Point{X: 0, Y: 0}, img, img.Bounds(), draw.Over, &draw.Options{})
-			clone := image.NewPaletted(frameBg.Bounds(), img.Palette)
-			draw.Draw(clone, clone.Bounds(), frameBg, image.Point{X: 0, Y: 0}, draw.Src)
-
-			//clone := frameBg
-
-			genericImage := image.Image(clone)
-			output[i] = &genericImage
-		}
-		return output, gifFile.Delay, nil
-	}
-
-	img, _, err := image.Decode(reader)
-	if err != nil {
-		return nil, nil, err
-	}
-	return []*image.Image{&img}, []int{}, nil
 }

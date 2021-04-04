@@ -6,6 +6,14 @@ import (
 	"image"
 )
 
+var Filters = map[string]interface{}{
+	"rectangle": Rectangle{},
+	"text":      Text{},
+	"rainbow":   Rainbow{},
+	"hyper":     Hyper{},
+	"animate":   Animate{},
+}
+
 type BeforeRender interface {
 	BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNum int, component *entity.ImageComponent) *gg.Context
 }

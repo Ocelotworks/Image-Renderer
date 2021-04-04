@@ -91,3 +91,10 @@ func ProcessYCbCrFrame(frame *image.YCbCr, callback func(arr []uint8, out []uint
 	castFrame := image.Image(&newImage)
 	return &castFrame
 }
+
+// Returns if two colours are equal
+func ColoursEqual(colour1 color.Color, colour2 color.Color) bool {
+	r1, b1, g1, a1 := colour1.RGBA()
+	r2, b2, g2, a2 := colour2.RGBA()
+	return r1 == r2 && b1 == b2 && g1 == g2 && a1 == a2
+}
