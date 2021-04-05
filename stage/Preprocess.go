@@ -62,6 +62,11 @@ func ProcessBeforeStackingFilters(request *entity.ImageRequest) {
 	}
 }
 
+func isFloat(value interface{}) bool {
+	_, ok := value.(float64)
+	return ok
+}
+
 // Loads every image in the request and maps them into arrays of images and delays
 func MapComponentFrames(request *entity.ImageRequest) ([][]int, [][]*image.Image, error) {
 	componentFrameImages := make([][]*image.Image, len(request.ImageComponents))
@@ -69,15 +74,12 @@ func MapComponentFrames(request *entity.ImageRequest) ([][]int, [][]*image.Image
 
 	for comp, component := range request.ImageComponents {
 		componentStackStart := time.Now()
-		if component.URL == "" {
-			continue
-		}
 
-		if component.Position.X == nil {
+		if component.Position.X == nil || !isFloat(component.Position.X) {
 			component.Position.X = float64(0)
 		}
 
-		if component.Position.Y == nil {
+		if component.Position.Y == nil || !isFloat(component.Position.X) {
 			component.Position.Y = float64(0)
 		}
 
@@ -89,7 +91,9 @@ func MapComponentFrames(request *entity.ImageRequest) ([][]int, [][]*image.Image
 			component.Position.Height = float64(0)
 		}
 
-		fmt.Println(component)
+		if component.URL == "" {
+			continue
+		}
 
 		// decide which function to get the image with (explicitly typed)
 		var getImageFunc = getImageURL
