@@ -3,6 +3,7 @@ package filter
 import (
 	"github.com/fogleman/gg"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
 	"image"
 )
 
@@ -12,11 +13,7 @@ func (a Animate) AfterStacking(filter *entity.Filter, request *entity.ImageReque
 	imageDeficit := float64(len(filter.Arguments["frames"].([]interface{})) - len(*images))
 	i := 0
 
-	delay := 5
-
-	if filter.Arguments["delay"] != nil {
-		delay = int(filter.Arguments["delay"].(float64))
-	}
+	delay := int(helper.GetFloatDefault(filter.Arguments["delay"], 5))
 
 	for imageDeficit > 0 {
 		*images = append(*images, (*images)[i%len(*images)])

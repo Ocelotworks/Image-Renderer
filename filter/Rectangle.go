@@ -3,31 +3,27 @@ package filter
 import (
 	"github.com/fogleman/gg"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
 )
 
 type Rectangle struct{}
 
 func (r Rectangle) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNum int, component *entity.ImageComponent) *gg.Context {
-	colour, ok := args["colour"].(string)
-	if ok {
-		ctx.SetHexColor(colour)
-	}
+	x := helper.GetFloatDefault(args["x"], 0)
+	y := helper.GetFloatDefault(args["y"], 0)
+	w := helper.GetFloatDefault(args["w"], float64(ctx.Width()))
+	h := helper.GetFloatDefault(args["h"], float64(ctx.Height()))
+	fill := helper.GetBoolDefault(args["fill"], true)
+	colour := helper.GetStringDefault(args["colour"], "#000000")
 
-	ctx.DrawRectangle(conditionalFloat(args["x"], 0), conditionalFloat(args["y"], 0), conditionalFloat(args["w"], float64(ctx.Width())), conditionalFloat(args["h"], float64(ctx.Height())))
+	ctx.SetHexColor(colour)
+	ctx.DrawRectangle(x, y, w, h)
 
-	fill, ok := args["fill"].(bool)
-	if !ok || fill {
+	if fill {
 		ctx.Fill()
 	} else {
 		ctx.Stroke()
 	}
-	return ctx
-}
 
-func conditionalFloat(input interface{}, defaultValue float64) float64 {
-	castInput, ok := input.(float64)
-	if !ok {
-		return defaultValue
-	}
-	return castInput
+	return ctx
 }
