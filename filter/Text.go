@@ -33,29 +33,38 @@ func (r Text) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNu
 		ctx.DrawStringWrapped(content, x-3, y-3, ax, ay, w, spacing, gg.Align(align))
 	}
 
+	if args["outlineColour"] != nil {
+		outlineColour := helper.GetStringDefault(args["outlineColour"], "#000000")
+		ctx.SetHexColor(outlineColour)
+		ctx.DrawStringWrapped(content, x-1, y-2, ax, ay, w+2, spacing, gg.Align(align))
+	}
+
 	if args["gradient"] != nil {
 		wrappedText := ctx.WordWrap(content, w)
 		textW, textH := ctx.MeasureMultilineString(strings.Join(wrappedText, "\n"), spacing)
-		textContext := gg.NewContext(int(textW), int(textH))
-		textContext.DrawStringWrapped(content, x, y, ax, ay, w, spacing, gg.Align(align))
+		textContext := gg.NewContext(int(textW+5), int(textH+30))
+		textContext.SetRGB(0, 0, 0)
+		_ = textContext.LoadFontFace(path.Join("res/font/", font), fontSize)
+		textContext.DrawStringWrapped(content, 0, 5, ax, ay, w, spacing, gg.Align(align))
 		textMask := textContext.AsMask()
 
 		// Create the gradient and set the original context to use it
-		gradient := args["gradient"].([]string)
-		grad := gg.NewLinearGradient(0, 0, w, fontSize)
+		gradient := args["gradient"].([]interface{})
+		grad := gg.NewLinearGradient(0, 0, 0, fontSize)
 		for i, stop := range gradient {
-			r, g, b, a := parseHexColor(stop)
+			r, g, b, a := parseHexColor(stop.(string))
 			grad.AddColorStop(float64(i), color.RGBA{R: r, G: g, B: b, A: a})
 		}
-		ctx.SetFillStyle(grad)
+		textContext.SetFillStyle(grad)
 
 		//Set the mask to our text path
-		_ = ctx.SetMask(textMask)
+		_ = textContext.SetMask(textMask)
 		// Fill the region the text is in with the gradient
-		ctx.DrawRectangle(x, y, textW, textH)
-		ctx.Fill()
+		textContext.DrawRectangle(0, 0, float64(textContext.Width()), float64(textContext.Height()))
+		textContext.Fill()
 		// Reset the mask
-		_ = ctx.SetMask(nil)
+		//_ = ctx.SetMask(nil)
+		ctx.DrawImage(textContext.Image(), int(x), int(y-5))
 	} else {
 		ctx.SetHexColor(colour)
 		ctx.DrawStringWrapped(content, x, y, ax, ay, w, spacing, gg.Align(align))
