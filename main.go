@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"runtime/pprof"
 	"time"
 )
@@ -92,7 +93,10 @@ func main() {
 		}
 	}()
 
+	wd, _ := os.Getwd()
+
 	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/output/", http.StripPrefix("/output", http.FileServer(http.Dir(path.Join(wd, "output")))))
 	_ = http.ListenAndServe(":2112", nil)
 
 	<-forever

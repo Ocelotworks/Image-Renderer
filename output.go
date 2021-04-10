@@ -16,7 +16,9 @@ import (
 	"image/color"
 	"image/gif"
 	"image/png"
+	"io/ioutil"
 	"log"
+	"os"
 	"sync"
 	"time"
 )
@@ -40,10 +42,10 @@ var (
 )
 
 // OutputImage outputs an image as a byte array and file extension combination
-func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, frameDisposal bool, compression bool) (string, string, int, error) {
+func OutputImage(input []image.Image, delay []int, frameDisposal bool, request *entity.ImageRequest) *entity.ImageResult {
 	buf := new(bytes.Buffer)
 	var format string
-	stegMessage, exception := json.Marshal(metadata)
+	stegMessage, exception := json.Marshal(request.Metadata)
 	if exception != nil {
 		stegMessage = []byte("OCELOTBOT")
 		sentry.CaptureException(exception)
@@ -88,7 +90,7 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, fr
 
 		exception = gif.EncodeAll(buf, &output)
 		if exception != nil {
-			return "", "", 0, exception
+			return &entity.ImageResult{Error: "image_encode"}
 		}
 		format = "gif"
 		gifEncode.Observe(float64(time.Since(gifEncodeStart).Milliseconds()))
@@ -114,13 +116,28 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, fr
 
 		pngEncode.Observe(float64(time.Since(pngEncodeStart).Milliseconds()))
 		if exception != nil {
-			return "", "", 0, exception
+			return &entity.ImageResult{Error: "image_encode"}
+		}
+	}
+
+	if request.Version >= 1 {
+		hostname, _ := os.Hostname()
+		fileName := fmt.Sprintf("%d.%s", time.Now().Unix(), format)
+		exception := ioutil.WriteFile("output/"+fileName, buf.Bytes(), os.ModePerm)
+		if exception != nil {
+			return &entity.ImageResult{Error: "write_error"}
+		}
+		// Mind your FUCKING business
+		//goland:noinspection HttpUrlsUsage
+		return &entity.ImageResult{
+			Path:      fmt.Sprintf("http://%s:2112/output/%s", hostname, fileName),
+			Extension: format,
 		}
 	}
 
 	originalLength := buf.Len() / 1000000
 
-	if compression {
+	if request.Compression {
 		log.Println("Compressing output...")
 		compressionStart := time.Now()
 		var compressedBuf bytes.Buffer
@@ -131,13 +148,20 @@ func OutputImage(input []image.Image, delay []int, metadata *entity.Metadata, fr
 		if exception == nil && gz.Close() == nil {
 			compress.Observe(float64(time.Since(compressionStart).Milliseconds()))
 			log.Println("Finished Compressing")
-			return base64.StdEncoding.EncodeToString(compressedBuf.Bytes()), "gzip/" + format, originalLength, nil
+			return &entity.ImageResult{
+				Data:      base64.StdEncoding.EncodeToString(compressedBuf.Bytes()),
+				Extension: "gzip/" + format,
+				Size:      originalLength,
+			}
 		}
 		fmt.Println("failed to compress: ", exception)
 	}
 
-	return base64.StdEncoding.EncodeToString(buf.Bytes()), format, originalLength, nil //Megabytes
-
+	return &entity.ImageResult{
+		Data:      base64.StdEncoding.EncodeToString(buf.Bytes()),
+		Extension: format,
+		Size:      originalLength,
+	}
 }
 
 func quantizeWorker(frameNum int, img image.Image, wg *sync.WaitGroup, output []*image.Paletted) {

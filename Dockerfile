@@ -32,5 +32,8 @@ WORKDIR /app
 COPY --from=go-build /src/main /app/
 RUN mkdir /app/res
 COPY --from=go-build /src/res/ /app/res/
+RUN mkdir /app/output
+COPY crontab.txt crontab.txt
+RUN crontab crontab.txt
 EXPOSE 2112
 ENTRYPOINT ./main

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
@@ -201,17 +200,9 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 		return &entity.ImageResult{Error: "debug"}
 	}
 
-	result, extension, length, exception := OutputImage(outputImages, outputDelay, request.Metadata, !shouldDiff, request.Compression)
+	output := OutputImage(outputImages, outputDelay, !shouldDiff, request)
 	processDuration.Observe(float64(time.Since(processDurationStart).Milliseconds()))
-	if exception != nil {
-		sentry.CaptureException(exception)
-		return &entity.ImageResult{Error: "output"}
-	}
-	return &entity.ImageResult{
-		Data:      result,
-		Extension: extension,
-		Size:      length,
-	}
+	return output
 }
 
 func max(i, i2 int) int {
