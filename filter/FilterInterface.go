@@ -10,6 +10,7 @@ var Filters = map[string]interface{}{
 	"rectangle": Rectangle{},
 	"text":      Text{},
 	"rainbow":   Rainbow{},
+	"greyscale": Greyscale{},
 	"hyper":     Hyper{},
 	"animate":   Animate{},
 }

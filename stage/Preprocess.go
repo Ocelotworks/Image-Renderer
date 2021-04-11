@@ -113,7 +113,7 @@ func MapComponentFrames(request *entity.ImageRequest) ([][]int, [][]*image.Image
 		for _, filterData := range component.Filters {
 			var filterObj interface{}
 			var ok bool
-			if filterObj, ok = filters[filterData.Name]; !ok {
+			if filterObj, ok = filter.Filters[filterData.Name]; !ok {
 				log.Println("Unknown filter type", filterData)
 				continue
 			}

@@ -8,7 +8,7 @@ import (
 )
 
 func ProcessFrame(frame *image.Image,
-	rgbCallback func(subPixel uint8, index int) uint8,
+	rgbCallback func(subPixel uint8, index int, newPix []uint8) uint8,
 	palettedCallback func(palette color.Color, index int) color.Color,
 	ycbcrCallback func(arr []uint8, out []uint8, wg *sync.WaitGroup, index int)) *image.Image {
 	switch (*frame).(type) {
@@ -26,7 +26,7 @@ func ProcessFrame(frame *image.Image,
 	}
 }
 
-func ProcessNRGBAFrame(frame *image.NRGBA, callback func(subPixel uint8, index int) uint8) *image.Image {
+func ProcessNRGBAFrame(frame *image.NRGBA, callback func(subPixel uint8, index int, newPix []uint8) uint8) *image.Image {
 	newImage := &image.NRGBA{
 		Rect:   frame.Rect,
 		Stride: frame.Stride,
@@ -36,7 +36,7 @@ func ProcessNRGBAFrame(frame *image.NRGBA, callback func(subPixel uint8, index i
 	return &castImage
 }
 
-func ProcessRGBAFrame(frame *image.RGBA, callback func(subPixel uint8, index int) uint8) *image.Image {
+func ProcessRGBAFrame(frame *image.RGBA, callback func(subPixel uint8, index int, newPix []uint8) uint8) *image.Image {
 	newImage := &image.RGBA{
 		Rect:   frame.Rect,
 		Stride: frame.Stride,
@@ -46,8 +46,8 @@ func ProcessRGBAFrame(frame *image.RGBA, callback func(subPixel uint8, index int
 	return &castImage
 }
 
-// Processes arrays of RGBA pixels
-func ProcessPixArray(pix []uint8, callback func(subPixel uint8, index int) uint8) []uint8 {
+// ProcessPixArray Processes arrays of RGBA pixels
+func ProcessPixArray(pix []uint8, callback func(subPixel uint8, index int, newPix []uint8) uint8) []uint8 {
 	newPix := make([]uint8, len(pix))
 	for i, subPixel := range pix {
 		value := (i + 1) % 4
@@ -55,7 +55,7 @@ func ProcessPixArray(pix []uint8, callback func(subPixel uint8, index int) uint8
 			newPix[i] = pix[i]
 			continue
 		}
-		newPix[i] = callback(subPixel, i)
+		newPix[i] = callback(subPixel, i, newPix)
 	}
 	return newPix
 }
@@ -97,4 +97,53 @@ func ColoursEqual(colour1 color.Color, colour2 color.Color) bool {
 	r1, b1, g1, a1 := colour1.RGBA()
 	r2, b2, g2, a2 := colour2.RGBA()
 	return r1 == r2 && b1 == b2 && g1 == g2 && a1 == a2
+}
+
+// BlendColours does a simple but inaccurate blend of two RGB colours
+func BlendColours(colour1 uint8, colour2 uint8) uint8 {
+	output := colour1/2 + colour2/3
+	if output > 255 {
+		return 255
+	}
+	return output
+}
+
+// HslToRgb converts a HSL Colour to RGB
+func HslToRgb(h float64, s float64, l float64) (uint8, uint8, uint8) {
+	if s == 0 {
+		return uint8(l * 255), uint8(l * 255), uint8(l * 255)
+	}
+
+	var v1, v2 float64
+	if l < 0.5 {
+		v2 = l * (1 + s)
+	} else {
+		v2 = (l + s) - (s * l)
+	}
+
+	v1 = 2*l - v2
+
+	r := HueToRGB(v1, v2, h+(1.0/3.0))
+	g := HueToRGB(v1, v2, h)
+	b := HueToRGB(v1, v2, h-(1.0/3.0))
+
+	return uint8(r * 255), uint8(g * 255), uint8(b * 255)
+}
+
+func HueToRGB(v1, v2, h float64) float64 {
+	if h < 0 {
+		h += 1
+	}
+	if h > 1 {
+		h -= 1
+	}
+	switch {
+	case 6*h < 1:
+		return (v1 + (v2-v1)*6*h)
+	case 2*h < 1:
+		return v2
+	case 3*h < 2:
+		return v1 + (v2-v1)*((2.0/3.0)-h)*6
+	}
+	return v1
 }
