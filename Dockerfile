@@ -35,6 +35,5 @@ COPY --from=go-build /src/res/ /app/res/
 RUN mkdir /app/output
 COPY crontab.txt crontab.txt
 RUN crontab crontab.txt
-RUN crond
 EXPOSE 2112
-ENTRYPOINT ./main
+ENTRYPOINT crond && ./main
