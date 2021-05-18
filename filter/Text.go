@@ -13,16 +13,29 @@ import (
 type Text struct{}
 
 func (r Text) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNum int, component *entity.ImageComponent) *gg.Context {
-	x := helper.GetFloatDefault(args["x"], 0)
-	y := helper.GetFloatDefault(args["y"], 0)
-	ax := helper.GetFloatDefault(args["ax"], 0)
-	ay := helper.GetFloatDefault(args["ay"], 0)
-	w := helper.GetFloatDefault(args["w"], float64(ctx.Width()))
+
+	evalParams := map[string]interface{}{
+		"frameNum":  frameNum,
+		"component": component,
+		"url":       component.URL,
+		"cx":        component.Position.X,
+		"cy":        component.Position.Y,
+		"cw":        component.Position.Width,
+		"ch":        component.Position.Height,
+		"ctxw":      ctx.Width(),
+		"ctxh":      ctx.Height(),
+	}
+
+	x := helper.ParseFloat(args["x"], 0, evalParams)
+	y := helper.ParseFloat(args["y"], 0, evalParams)
+	ax := helper.ParseFloat(args["ax"], 0, evalParams)
+	ay := helper.ParseFloat(args["ay"], 0, evalParams)
+	w := helper.ParseFloat(args["w"], float64(ctx.Width()), evalParams)
 	colour := helper.GetStringDefault(args["colour"], "#ffffff")
 	content := helper.GetStringDefault(args["content"], "<no content>")
 	spacing := helper.GetFloatDefault(args["spacing"], 1.1)
 	align := helper.GetFloatDefault(args["align"], 0)
-	fontSize := helper.GetFloatDefault(args["fontSize"], 24)
+	fontSize := helper.ParseFloat(args["fontSize"], 24, evalParams)
 	font := helper.GetStringDefault(args["font"], "arial.ttf")
 
 	_ = ctx.LoadFontFace(path.Join("res/font/", font), fontSize)
