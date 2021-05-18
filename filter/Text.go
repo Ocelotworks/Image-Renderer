@@ -39,7 +39,6 @@ func (r Text) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNu
 	font := helper.GetStringDefault(args["font"], "arial.ttf")
 
 	_ = ctx.LoadFontFace(path.Join("res/font/", font), fontSize)
-
 	if args["shadowColour"] != nil {
 		shadowColour := helper.GetStringDefault(args["shadowColour"], "#000000")
 		ctx.SetHexColor(shadowColour)
@@ -49,7 +48,11 @@ func (r Text) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNu
 	if args["outlineColour"] != nil {
 		outlineColour := helper.GetStringDefault(args["outlineColour"], "#000000")
 		ctx.SetHexColor(outlineColour)
-		ctx.DrawStringWrapped(content, x-1, y-2, ax, ay, w+2, spacing, gg.Align(align))
+		// Loop shmoop
+		ctx.DrawStringWrapped(content, x+2, y-2, ax, ay, w, spacing, gg.Align(align))
+		ctx.DrawStringWrapped(content, x-2, y-2, ax, ay, w, spacing, gg.Align(align))
+		ctx.DrawStringWrapped(content, x+2, y+2, ax, ay, w, spacing, gg.Align(align))
+		ctx.DrawStringWrapped(content, x-2, y+2, ax, ay, w, spacing, gg.Align(align))
 	}
 
 	if args["gradient"] != nil {
