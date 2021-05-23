@@ -9,10 +9,22 @@ import (
 type Rectangle struct{}
 
 func (r Rectangle) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNum int, component *entity.ImageComponent) *gg.Context {
-	x := helper.GetFloatDefault(args["x"], 0)
-	y := helper.GetFloatDefault(args["y"], 0)
-	w := helper.GetFloatDefault(args["w"], float64(ctx.Width()))
-	h := helper.GetFloatDefault(args["h"], float64(ctx.Height()))
+	evalParams := map[string]interface{}{
+		"frameNum":  frameNum,
+		"component": component,
+		"url":       component.URL,
+		"cx":        component.Position.X,
+		"cy":        component.Position.Y,
+		"cw":        component.Position.Width,
+		"ch":        component.Position.Height,
+		"ctxw":      ctx.Width(),
+		"ctxh":      ctx.Height(),
+	}
+
+	x := helper.ParseFloat(args["x"], 0, evalParams)
+	y := helper.ParseFloat(args["y"], 0, evalParams)
+	w := helper.ParseFloat(args["w"], float64(ctx.Width()), evalParams)
+	h := helper.ParseFloat(args["h"], float64(ctx.Height()), evalParams)
 	fill := helper.GetBoolDefault(args["fill"], true)
 	colour := helper.GetStringDefault(args["colour"], "#000000")
 

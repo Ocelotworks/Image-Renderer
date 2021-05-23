@@ -148,6 +148,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			if frameNum < len(outputContexts) {
 				outputCtx = outputContexts[frameNum]
 			} else {
+				// Check for a MaxWidth param, or default to 1920 and resize the image accordingly
 				if request.MaxWidth > -1 && component.Position.Width != nil && component.Position.Height != nil {
 					if request.MaxWidth == 0 {
 						request.MaxWidth = 1920

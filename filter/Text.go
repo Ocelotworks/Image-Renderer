@@ -55,6 +55,17 @@ func (r Text) BeforeRender(ctx *gg.Context, args map[string]interface{}, frameNu
 		ctx.DrawStringWrapped(content, x-2, y+2, ax, ay, w, spacing, gg.Align(align))
 	}
 
+	if args["background"] != nil {
+		stringW, stringH := ctx.MeasureMultilineString(content, spacing)
+		padding := helper.ParseFloat(args["padding"], 0, evalParams)
+		stringH += padding
+		stringW = helper.ParseFloat(args["bgWidth"], stringW, evalParams)
+		stringW += padding
+		ctx.SetHexColor(args["background"].(string))
+		ctx.DrawRectangle(x-(ax*stringW), y-(ay*stringH), stringW, stringH)
+		ctx.Fill()
+	}
+
 	if args["gradient"] != nil {
 		wrappedText := ctx.WordWrap(content, w)
 		textW, textH := ctx.MeasureMultilineString(strings.Join(wrappedText, "\n"), spacing)
