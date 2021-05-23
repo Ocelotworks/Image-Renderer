@@ -69,11 +69,10 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 		}
 
 		var frameContexts []*gg.Context
-		componentDelay := []int{}
 
 		frameImages := componentFrameImages[comp]
 		frameDelay := componentFrameDelays[comp]
-		componentDelay = frameDelay
+		componentDelay := frameDelay
 
 		// Check for relative width/height and set to the correct value
 		if ppw, ok := component.Position.Width.(string); ok {
@@ -149,6 +148,18 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			if frameNum < len(outputContexts) {
 				outputCtx = outputContexts[frameNum]
 			} else {
+				if request.MaxWidth > -1 && component.Position.Width != nil && component.Position.Height != nil {
+					if request.MaxWidth == 0 {
+						request.MaxWidth = 1920
+					}
+					componentWidth := int(component.Position.Width.(float64))
+					componentHeight := int(component.Position.Height.(float64))
+					if componentWidth > request.MaxWidth {
+						component.Position.Height = float64(request.MaxWidth * componentHeight / componentWidth)
+						component.Position.Width = float64(request.MaxWidth)
+					}
+				}
+
 				if request.Width == 0 && component.Position.Width != nil {
 					request.Width = int(component.Position.Width.(float64))
 				}

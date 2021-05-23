@@ -229,5 +229,6 @@ func getImage(input io.Reader) ([]*image.Image, []int, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return []*image.Image{&img}, []int{}, nil
 }

@@ -100,17 +100,24 @@ func OutputImage(input []image.Image, delay []int, frameDisposal bool, request *
 		stegoBuf := new(bytes.Buffer)
 		exception = steganography.Encode(stegoBuf, input[0], stegMessage)
 
+		compressionLevel := png.BestSpeed
+		if input[0].Bounds().Dx() > 1000 || input[0].Bounds().Dy() > 1000 {
+			compressionLevel = png.BestCompression
+		}
+		encoder := png.Encoder{
+			CompressionLevel: compressionLevel,
+		}
+
 		if exception != nil {
 			sentry.CaptureException(exception)
 			log.Println("Unable to encode message: ", exception)
-			exception = png.Encode(buf, input[0])
+			exception = encoder.Encode(buf, input[0])
 		} else {
-
-			_, exception := stegoBuf.WriteTo(buf)
+			_, exception = stegoBuf.WriteTo(buf)
 			if exception != nil {
 				sentry.CaptureException(exception)
 				log.Println("Unable to write steg message: ", exception)
-				exception = png.Encode(buf, input[0])
+				exception = encoder.Encode(buf, input[0])
 			}
 		}
 

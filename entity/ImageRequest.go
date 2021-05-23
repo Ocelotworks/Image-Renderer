@@ -9,4 +9,5 @@ type ImageRequest struct {
 	Debug           bool              `json:"debug"`
 	Version         int               `json:"version"`
 	Compression     bool              `json:"compression"`
+	MaxWidth        int               `json:"maxWidth"`
 }
