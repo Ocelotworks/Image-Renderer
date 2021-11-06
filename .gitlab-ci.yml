@@ -25,7 +25,6 @@ build:
       -t $REGISTRY_MIRROR/$CI_PROJECT_PATH:latest
       --build-arg GITLAB_TOKEN=$GITLAB_TOKEN
       --build-arg GITLAB_DOMAIN=$GITLAB_DOMAIN
-      --build-arg RABBIT_HOST=$RABBIT_HOST
     - docker push $REGISTRY/$CI_PROJECT_PATH:latest
     - docker push $REGISTRY_MIRROR/$CI_PROJECT_PATH:latest || true
     - docker image rm $REGISTRY/$CI_PROJECT_PATH:latest
