@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/auyer/steganography"
@@ -186,18 +187,26 @@ func quantizeWorker(frameNum int, img image.Image, wg *sync.WaitGroup, output []
 
 	palettedImage := image.NewPaletted(img.Bounds(), qPalette)
 
+	quantizerCache := make(map[uint32]uint8)
+
 	// Convert the RGBA image into a PNG
 	for i := range rgbaImage.Pix {
 		// Grab the first 4
 		if i%4 != 0 {
 			continue
 		}
-		palettedImage.Pix[i/4] = uint8(qPalette.Index(color.RGBA{
-			R: rgbaImage.Pix[i],
-			G: rgbaImage.Pix[i+1],
-			B: rgbaImage.Pix[i+2],
-			A: rgbaImage.Pix[i+3],
-		}))
+		imgValue := binary.LittleEndian.Uint32(rgbaImage.Pix[i : i+4])
+		newColour, ok := quantizerCache[imgValue]
+		if !ok {
+			newColour = uint8(qPalette.Index(color.RGBA{
+				R: rgbaImage.Pix[i],
+				G: rgbaImage.Pix[i+1],
+				B: rgbaImage.Pix[i+2],
+				A: rgbaImage.Pix[i+3],
+			}))
+			quantizerCache[imgValue] = newColour
+		}
+		palettedImage.Pix[i/4] = newColour
 	}
 
 	output[frameNum] = palettedImage
