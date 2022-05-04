@@ -68,7 +68,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			shouldDiff = true
 		}
 
-		var frameContexts []*gg.Context
+		frameContexts := make(chan *gg.Context)
 
 		frameImages := componentFrameImages[comp]
 		frameDelay := componentFrameDelays[comp]
@@ -85,42 +85,48 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			fmt.Println("Transforming height to ", component.Position.Height)
 		}
 
-		// If there are no frames in this image, create a new blank context of the correct width/height
-		if len(frameImages) == 0 {
-			ctx := gg.NewContext(int(component.Position.Width.(float64)), int(component.Position.Height.(float64)))
-			if comp == 0 {
-				if component.Background != "" {
-					ctx.SetHexColor(component.Background)
-					ctx.DrawRectangle(0, 0, float64(request.Width), float64(request.Height))
-					ctx.Fill()
-				}
-			}
-			frameContexts = []*gg.Context{ctx}
-		} else {
-			// create an image context for the image (or each frame for a gif)
-			frameContexts = make([]*gg.Context, len(frameImages))
-			for i, img := range frameImages {
-				dx := (*img).Bounds().Dx()
-				dy := (*img).Bounds().Dy()
-				ctx := gg.NewContext(dx, dy)
-				// this is a replacement for me figuring out the actual problems
-				if component.Background != "" {
-					ctx.SetHexColor(component.Background)
-					ctx.DrawRectangle(0, 0, float64(dx), float64(dy))
-					ctx.Fill()
-				}
-				ctx.DrawImage(*img, 0, 0)
-				frameContexts[i] = ctx
-			}
-		}
-
+		frameCount := 1
 		var wg sync.WaitGroup
 
-		totalFrames := max(len(frameContexts), len(outputContexts))
+		go (func() {
+			// If there are no frames in this image, create a new blank context of the correct width/height
+			if len(frameImages) == 0 {
+				ctx := gg.NewContext(int(component.Position.Width.(float64)), int(component.Position.Height.(float64)))
+				if comp == 0 {
+					if component.Background != "" {
+						ctx.SetHexColor(component.Background)
+						ctx.DrawRectangle(0, 0, float64(request.Width), float64(request.Height))
+						ctx.Fill()
+					}
+				}
+				frameContexts <- ctx
+				close(frameContexts)
+			} else {
+				// create an image context for the image (or each frame for a gif)
+				//frameContexts = make([]*gg.Context, len(frameImages))
+				frameCount = len(frameImages)
+				for _, img := range frameImages {
+					dx := (*img).Bounds().Dx()
+					dy := (*img).Bounds().Dy()
+					ctx := gg.NewContext(dx, dy)
+					// this is a replacement for me figuring out the actual problems
+					if component.Background != "" {
+						ctx.SetHexColor(component.Background)
+						ctx.DrawRectangle(0, 0, float64(dx), float64(dy))
+						ctx.Fill()
+					}
+					ctx.DrawImage(*img, 0, 0)
+					frameContexts <- ctx
+				}
+				close(frameContexts)
+			}
+		})()
+
+		frameNum := 0
 		// get the image context for each frame (only 1 frame if not a gif)
-		for frameNum := 0; frameNum < totalFrames; frameNum++ {
+		for inputFrameCtx := range frameContexts {
 			// loop over a gif and apply it to all canvases (or apply a static image to every frame)
-			inputFrameCtx := frameContexts[frameNum%len(frameContexts)]
+			//inputFrameCtx := frameContexts[frameNum%len(frameContexts)]
 
 			// Only apply the filter to the first frame of animated GIFs
 			if frameNum == 0 || len(frameContexts) > 1 {
@@ -195,6 +201,7 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			if shouldDiff && comp == len(request.ImageComponents)-1 {
 				stage.GIFOptimise(outputCtx, frameNum, &wg)
 			}
+			frameNum++
 			componentDrawDuration.Observe(float64(time.Since(componentDrawStart).Milliseconds()))
 		}
 		log.Println("Waiting for diff to finish...")
