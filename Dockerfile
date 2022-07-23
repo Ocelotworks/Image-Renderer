@@ -36,4 +36,6 @@ RUN mkdir /app/output
 COPY crontab.txt crontab.txt
 RUN crontab crontab.txt
 EXPOSE 2112
+HEALTHCHECK --interval=2m --start-period=1m --retries=5 \
+    CMD curl -f http://localhost:2112/healthz || exit 1
 ENTRYPOINT crond && ./main
