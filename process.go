@@ -129,25 +129,25 @@ func ProcessImage(request *entity.ImageRequest) *entity.ImageResult {
 			//inputFrameCtx := frameContexts[frameNum%len(frameContexts)]
 
 			// Only apply the filter to the first frame of animated GIFs
-			if frameNum == 0 || len(frameContexts) > 1 {
-				// apply any filters set for the component
-				for _, filterObject := range component.Filters {
-					// check the filter exists and apply it
-					var filterObj interface{}
-					var ok bool
-					if filterObj, ok = filter.Filters[filterObject.Name]; !ok {
-						log.Println("Unknown filter type", filterObject)
-						continue
-					}
-					if processFilter, ok := filterObj.(filter.BeforeRender); ok {
-						log.Println("Applying filter", filterObject.Name, filterObject.Arguments)
-						beforeRenderFilterStart := time.Now()
-						processFilter.BeforeRender(inputFrameCtx, filterObject.Arguments, frameNum, component)
-						beforeRenderFilterDuration.Observe(float64(time.Since(beforeRenderFilterStart).Milliseconds()))
-					}
-
+			//if frameNum == 0 || len(frameContexts) > 1 {
+			// apply any filters set for the component
+			for _, filterObject := range component.Filters {
+				// check the filter exists and apply it
+				var filterObj interface{}
+				var ok bool
+				if filterObj, ok = filter.Filters[filterObject.Name]; !ok {
+					log.Println("Unknown filter type", filterObject)
+					continue
 				}
+				if processFilter, ok := filterObj.(filter.BeforeRender); ok {
+					log.Println("Applying filter", filterObject.Name, filterObject.Arguments)
+					beforeRenderFilterStart := time.Now()
+					processFilter.BeforeRender(inputFrameCtx, filterObject.Arguments, frameNum, component)
+					beforeRenderFilterDuration.Observe(float64(time.Since(beforeRenderFilterStart).Milliseconds()))
+				}
+
 			}
+			//}
 
 			// check if there is an existing context for this frame
 			var outputCtx *gg.Context
