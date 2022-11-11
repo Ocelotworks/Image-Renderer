@@ -2,22 +2,10 @@ package stage
 
 import (
 	"github.com/fogleman/gg"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
 	"golang.org/x/image/draw"
 	"image"
-	"log"
 	"sync"
-	"time"
-)
-
-var (
-	frameDiffDuration = promauto.NewSummary(prometheus.SummaryOpts{
-		Namespace: "image_renderer",
-		Name:      "frame_diff_duration",
-		Help:      "Duration taken to diff completed frames",
-	})
 )
 
 // The fully intact previous frame, used to determine what has changed in the next frame
@@ -29,16 +17,17 @@ func GIFOptimise(outputCtx *gg.Context, frameNum int, wg *sync.WaitGroup) {
 	draw.Copy(maskCopy, image.Point{X: 0, Y: 0}, outputCtx.Image(), outputCtx.Image().Bounds(), draw.Src, nil)
 	if frameNum > 0 {
 		wg.Add(1)
-		go diffMask(outputCtx, unmaskedPrevious, wg, frameNum)
+		go diffMaskRGBA(maskCopy, unmaskedPrevious.(*image.RGBA), wg)
+		//go diffMask(outputCtx, unmaskedPrevious, wg, frameNum)
 	}
 	unmaskedPrevious = maskCopy
 }
 
 // Erases pixels on `context` that are different to those on `image2`
 func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup, num int) {
-	defer wg.Done()
-	diffMaskStart := time.Now()
-	log.Printf("Diff for frame %d has finished", num)
+	if wg != nil {
+		defer wg.Done()
+	}
 	image1 := context.Image()
 	dx := image1.Bounds().Dx()
 	dy := image1.Bounds().Dy()
@@ -51,6 +40,19 @@ func diffMask(context *gg.Context, image2 image.Image, wg *sync.WaitGroup, num i
 			}
 		}
 	}
+}
 
-	frameDiffDuration.Observe(float64(time.Since(diffMaskStart).Milliseconds()))
+func diffMaskRGBA(image1 *image.RGBA, image2 *image.RGBA, wg *sync.WaitGroup) {
+	if wg != nil {
+		defer wg.Done()
+	}
+	imgLength := len(image1.Pix) - 3
+
+	for i := 0; i < imgLength; i += 3 {
+		if image1.Pix[i] != image2.Pix[i] || image1.Pix[i+1] != image2.Pix[i+1] || image1.Pix[i+2] != image2.Pix[i+2] {
+			image1.Pix[i] = 0x00
+			image1.Pix[i+1] = 0x00
+			image1.Pix[i+2] = 0x00
+		}
+	}
 }

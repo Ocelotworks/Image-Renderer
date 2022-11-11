@@ -139,7 +139,7 @@ func HueToRGB(v1, v2, h float64) float64 {
 	}
 	switch {
 	case 6*h < 1:
-		return (v1 + (v2-v1)*6*h)
+		return v1 + (v2-v1)*6*h
 	case 2*h < 1:
 		return v2
 	case 3*h < 2:
