@@ -46,13 +46,14 @@ func diffMaskRGBA(image1 *image.RGBA, image2 *image.RGBA, wg *sync.WaitGroup) {
 	if wg != nil {
 		defer wg.Done()
 	}
-	imgLength := len(image1.Pix) - 3
+	imgLength := len(image1.Pix) - 4
 
-	for i := 0; i < imgLength; i += 3 {
-		if image1.Pix[i] != image2.Pix[i] || image1.Pix[i+1] != image2.Pix[i+1] || image1.Pix[i+2] != image2.Pix[i+2] {
+	for i := 0; i < imgLength; i += 4 {
+		if image1.Pix[i] != image2.Pix[i] || image1.Pix[i+1] != image2.Pix[i+1] || image1.Pix[i+2] != image2.Pix[i+2] || image1.Pix[i+3] != image2.Pix[i+3] {
 			image1.Pix[i] = 0x00
 			image1.Pix[i+1] = 0x00
 			image1.Pix[i+2] = 0x00
+			image1.Pix[i+3] = 0x00
 		}
 	}
 }
