@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"gl.ocelotworks.com/ocelotbotv5/image-renderer/entity"
+	"gl.ocelotworks.com/ocelotbotv5/image-renderer/helper"
 	"image"
 	"image/color"
 	"image/gif"
@@ -129,19 +130,20 @@ func OutputImage(input []image.Image, delay []int, frameDisposal bool, request *
 	}
 
 	if request.Version >= 1 {
-		hostname, _ := os.Hostname()
 		fileSize := buf.Len() // Number of bytes in the image
 		fileName := fmt.Sprintf("%d.%s", time.Now().Unix(), format)
 		exception := ioutil.WriteFile("output/"+fileName, buf.Bytes(), os.ModePerm)
 		if exception != nil {
 			return &entity.ImageResult{Error: "write_error"}
 		}
+		host := helper.GetOutboundAddress()
 		// Mind your FUCKING business
 		//goland:noinspection HttpUrlsUsage
 		return &entity.ImageResult{
-			Path:      fmt.Sprintf("http://%s:2112/output/%s", hostname, fileName),
+			Path:      fmt.Sprintf("http://%s:2112/output/%s", host, fileName),
 			Extension: format,
 			Size:      fileSize,
+			Version:   1,
 		}
 	}
 

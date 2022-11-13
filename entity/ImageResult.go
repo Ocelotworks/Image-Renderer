@@ -7,4 +7,5 @@ type ImageResult struct {
 	Extension string `json:"extension,omitempty"`
 	Size      int    `json:"size,omitempty"`
 	Error     string `json:"err,omitempty"`
+	Version   int    `json:"version"`
 }
