@@ -52,12 +52,18 @@ func main() {
 		log.Fatalf("Failed to connect to RabbitMQ: %s", exception)
 	}
 
+	notifyClose := make(chan *amqp.Error)
+	go closeListener(notifyClose)
+	conn.NotifyClose(notifyClose)
+
 	channel, exception := conn.Channel()
 
 	if exception != nil {
 		sentry.CaptureException(exception)
 		log.Fatalf("Failed to open channel: %s", exception)
 	}
+
+	channel.NotifyClose(notifyClose)
 
 	priority := 0
 
@@ -111,6 +117,12 @@ func main() {
 	_ = http.ListenAndServe(":2112", nil)
 
 	<-forever
+}
+
+func closeListener(close chan *amqp.Error) {
+	err := <-close
+	fmt.Println("Close detected", err)
+	os.Exit(1)
 }
 
 func handleHealthRequest(writer http.ResponseWriter, request *http.Request) {
